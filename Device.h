@@ -1,5 +1,8 @@
 #pragma once
 
+#define TEST 0
+
+
 #include "sample.h"
 
 #include <list>
@@ -70,12 +73,47 @@ public:
 
 	Device(const DeviceId& device);
 	~Device(void);
+
+	HDWF handle() { return m_devHandle; }
+
+	enum Waveform {
+		Dc				= 0,
+		Sine			= 1,
+		Square			= 2,
+		Triangle		= 3,
+		RampUp			= 4,
+		RampDown		= 5,
+		Noise			= 6,
+		Custom			= 30,
+		Play			= 31
+	};
+	void setAnalogOutputWaveform(int channel, Waveform w);
+	void setAnalogOutputAmplitude(int channel, double v);
+	void setAnalogOutputFrequency(int channel, double f);
+	void setAnalogOutputEnabled(int channel, bool e);
+
+	void setAnalogInputSamplingFreq(double f);
+	void setAnalogInputRange(int channel, double v);
+	void setAnalogInputEnabled(int channel, bool e);
+
+	enum AcquisitionMode {
+		Single			= 0,
+		ScanShift		= 1,
+		ScanScreen		= 2,
+		Record			= 3
+	};
+	void setAnalogInputAcquisitionMode(AcquisitionMode m);
+	void setAnalogInputReconfigure(bool r);
+	void setAnalogInputStart(bool s);
+
 	bool isOpen(void) const;
+
+	/*
 	void enableOutput(double amplitude); // in volts
 	void setOutputConfig(double signalFreq);
-
 	void startAcquisition(double voltRange);
-	void setInputConfig(double sampling_freq, double num_samples);
+	void setInputConfig(double samplingFreq, double samplingDurationS);
+	*/
 
 	void readAnalogInput(double *buffer, int size);
 	SampleState analogInSampleState();
@@ -116,43 +154,64 @@ std::ostream& operator<<(std::ostream& lhs, const Device::DeviceState& rhs);
 
 
 // Thread function, that polls and reads the inputbuffer
-typedef std::shared_ptr<std::vector<double>> SharedSampleStorage;
+typedef std::shared_ptr<std::vector<std::vector<double>>> SharedSampleStorage;
 typedef std::shared_ptr<std::atomic<bool>> SharedTerminateFlag;
 
-auto readSamplesFunction = [](Device *handle, SharedSampleStorage samples, SharedTerminateFlag terminateRequest)
+
+auto readSamplesFunction1 = [](Device *handle,
+std::vector<double> points,
+SharedSampleStorage samples,
+SharedTerminateFlag terminateRequest)
 {
 	double *buffer = new double[Device::chunkSize()];
-	double freq = 50;
+
+	auto pointsIter = points.begin();
+	auto samplesIter = samples->begin(); // Iter points to a vector of samples
+
+	double freq = *pointsIter;
 
 
-	while(!terminateRequest->load()) {
 
-		auto state = handle->analogInSampleState();
 
-		if (state.corrupted != 0 || state.lost != 0)
-			std::cout << "corrupted=" << state.corrupted << " lost=" << state.lost << std::endl;
+	while(!terminateRequest->load() /* && pointsIter != points.end() */) {
 
 		if (handle->inputStatus() == Device::Done) {
 
-			if (freq > 20000) {
-				terminateRequest->store(true);
-				continue;
-			}
-			freq *= 2;
+			samplesIter++;	// load next samples buffer
+			pointsIter++;	// load next frequency
 
-			handle->setOutputConfig(freq);
-			handle->startAcquisition(10);
+			freq = *pointsIter;
+
+
+			//handle->setOutputConfig(freq);
+			std::cout << "f: " << freq << " Hz" << std::endl;
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
 		}
 
-		if (state.available > 0) {
-			int count = state.available > Device::chunkSize() ? Device::chunkSize() : state.available;
+		auto sampleState = handle->analogInSampleState();
+
+		if (sampleState.corrupted != 0 || sampleState.lost != 0) {
+
+			static int counter = 0;
+			counter++;
+			std::cout << "corrupted=" << sampleState.corrupted << " lost=" << sampleState.lost << std::endl;
+			//if (counter>5)
+			//	exit(-3);
+		}
+
+		if (sampleState.available > 0) {
+#if TEST == 1
+			int count = 5;
+#else
+			int count = sampleState.available > Device::chunkSize() ? Device::chunkSize() : sampleState.available;
+#endif
 			handle->readAnalogInput(buffer, count);
-			copy(&buffer[0], &buffer[count], back_inserter(*samples));
-		} else {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			copy(&buffer[0], &buffer[count], back_inserter(*samplesIter));
 		}
 	}
 
+	terminateRequest->store(true);
 	delete[] buffer;
 };
 

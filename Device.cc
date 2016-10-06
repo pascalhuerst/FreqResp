@@ -84,7 +84,7 @@ Device::Device(const DeviceId &device)
 Device::~Device(void)
 {
 	if (isOpen())
-		FDwfDeviceClose(this->m_devHandle);
+		FDwfDeviceClose(m_devHandle);
 }
 
 bool Device::isOpen(void) const
@@ -112,6 +112,100 @@ std::ostream& operator<<(std::ostream& lhs, const Device::DeviceState& rhs)
 {
 	return lhs << Device::s_stateNames[rhs];
 }
+
+void Device::setAnalogOutputWaveform(int channel, Device::Waveform w)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogOutNodeFunctionSet(m_devHandle, channel, AnalogOutNodeCarrier, static_cast<uint8_t>(w)),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void Device::setAnalogOutputAmplitude(int channel, double v)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogOutNodeAmplitudeSet(m_devHandle, channel, AnalogOutNodeCarrier, v),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+}
+
+void Device::setAnalogOutputEnabled(int channel, bool e)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogOutNodeEnableSet(m_devHandle, channel, AnalogOutNodeCarrier, e),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogOutConfigure(m_devHandle, channel, e),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void Device::setAnalogOutputFrequency(int channel, double f)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogOutNodeFrequencySet(m_devHandle, channel, AnalogOutNodeCarrier, f),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+
+void Device::setAnalogInputSamplingFreq(double f)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInFrequencySet(m_devHandle, f),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+}
+
+void Device::setAnalogInputRange(int channel, double v)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInChannelRangeSet(m_devHandle, channel, v),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void Device::setAnalogInputEnabled(int channel, bool e)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInChannelEnableSet(m_devHandle, channel, e),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+}
+
+void Device::setAnalogInputAcquisitionMode(AcquisitionMode m)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInAcquisitionModeSet(m_devHandle, static_cast<int>(m)),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+}
+
+void Device::setAnalogInputReconfigure(bool r)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInConfigure(m_devHandle, r, false),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+}
+
+void Device::setAnalogInputStart(bool s)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInConfigure(m_devHandle, false, s),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+
+/////////////////////////////
+#if 0
+
 
 void Device::startAcquisition(double voltRange)
 {
@@ -171,17 +265,17 @@ void Device::setInputConfig(double samplingFreq, double samplingDurationS)
 	checkAndThrow(FDwfAnalogInFrequencyGet(m_devHandle, &acquiredFreq),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 	std::cout << "samplingFreq=" << acquiredFreq << std::endl;
-
-	//checkAndThrow(FDwfAnalogInRecordLengthSet(m_devHandle, samplingDurationS),
-	//			  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-	//double acquiredDurationS;
-	//checkAndThrow(FDwfAnalogInRecordLengthGet(m_devHandle, &acquiredDurationS),
-	//			  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-	//std::cout << "samplingDuration=" << acquiredDurationS << std::endl;
-
+	checkAndThrow(FDwfAnalogInRecordLengthSet(m_devHandle, samplingDurationS),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+	double acquiredDurationS;
+	checkAndThrow(FDwfAnalogInRecordLengthGet(m_devHandle, &acquiredDurationS),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+	std::cout << "samplingDuration=" << acquiredDurationS << std::endl;
 	checkAndThrow(FDwfAnalogInConfigure(this->m_devHandle, false, true),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
+#endif
+
 
 Device::SampleState Device::analogInSampleState()
 {
@@ -189,12 +283,13 @@ Device::SampleState Device::analogInSampleState()
 	checkAndThrow(FDwfAnalogInStatus(m_devHandle, true, &state),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 
-
 	Device::SampleState ret = {-1, -1, -1};
+#if 0
 	// These flags seem to be obsolete ?!
 	if(state == stsCfg || state == stsPrefill || state == stsArm){
 		return ret;
 	}
+#endif
 
 	checkAndThrow(FDwfAnalogInStatusRecord(m_devHandle, &ret.available, &ret.lost, &ret.corrupted),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
@@ -204,87 +299,16 @@ Device::SampleState Device::analogInSampleState()
 
 void Device::readAnalogInput(double *buffer, int size)
 {
-		checkAndThrow(FDwfAnalogInStatusData(m_devHandle, Device::s_channelId, buffer, size),
-					  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-}
-
-
-
-bool Device::read_rms(double frequency, int num_samples, double& rms_out)
-{
-	if (!isOpen()) {
-		std::cout << "Analog Discovery device not accessible" << std::endl << std::flush;
-		return false;
+#if TEST == 1
+	static double val = 0.f;
+	for (int i=0; i<size; i++) {
+		val += 0.1;
+		buffer[i] = val;
 	}
-
-	// Configure input to take num_samples samples at 64 time higher than signal frequency
-	setInputConfig(frequency * 32, num_samples);
-	setOutputConfig(frequency);
-
-	// Wait 1ms to settle output freq
-	// This is just kept for the safety purpose, and can be removed while
-	// doing actual measurements.
-	//	usleep(1000);
-
-	STS status;
-	int captured_samples = 0;
-	int available_samples, lost_samples, corrupted_samples;
-	bool lost, corrupted;
-	double* samples_data;
-	int cs_sum = 0;
-
-	// Allocate 512 more samples to accommodate last read
-	samples_data = new double[num_samples + 512];
-	if (samples_data == nullptr) {
-		std::cout << "Memory allocation failed for freq: " << frequency << std::endl << std::flush;
-		return false;
-	}
-
-	while (captured_samples < num_samples) {
-
-		if(!FDwfAnalogInStatus(this->m_devHandle, true, &status)) {
-			return false;
-		}
-
-		if(captured_samples == 0 && (status == stsCfg || status == stsPrefill || status == stsArm)){
-			// Acquisition not yet started.
-			continue;
-		}
-
-		FDwfAnalogInStatusRecord(this->m_devHandle, &available_samples,	&lost_samples, &corrupted_samples);
-
-		available_samples += lost_samples;
-
-		if(lost_samples != 0) lost = true;
-		if(corrupted_samples != 0) {
-			corrupted = true;
-			cs_sum += corrupted_samples;
-		}
-
-		if(!available_samples) continue;
-
-		// by the time last call to read status is made, the
-		// captured_samples can go beyond num_samples if
-		// available_samples are added to it.
-		FDwfAnalogInStatusData(this->m_devHandle, 0, &samples_data[captured_samples], available_samples);
-		captured_samples += available_samples;
-
-	}
-
-	rms_out = 0;
-	for (int i = 0; i < captured_samples; i++)
-		rms_out += pow(samples_data[i], 2);
-
-	rms_out = sqrt(rms_out / captured_samples);
-	if (cs_sum) {
-		std::cout << "Corrupted Samples: " << cs_sum << std::endl;
-		std::cout << "Freq: " << frequency << "\tRMS: " << rms_out << std::endl << std::flush;
-	}
-	std::cout << "Freq: " << frequency << "\tRMS: " << rms_out << std::endl << std::flush;
-
-	delete[] samples_data;
-
-	return true;
+#else
+	checkAndThrow(FDwfAnalogInStatusData(m_devHandle, Device::s_channelId, buffer, size),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+#endif
 }
 
 SharedTerminateFlag createTerminateFlag()
