@@ -74,8 +74,6 @@ public:
 	Device(const DeviceId& device);
 	~Device(void);
 
-	HDWF handle() { return m_devHandle; }
-
 	enum Waveform {
 		Dc				= 0,
 		Sine			= 1,
@@ -103,6 +101,8 @@ public:
 		Record			= 3
 	};
 	void setAnalogInputAcquisitionMode(AcquisitionMode m);
+	//TODO: this should be using std::chrono, actually
+	void setAnalogInputAcquisitionDuration(double s);
 	void setAnalogInputReconfigure(bool r);
 	void setAnalogInputStart(bool s);
 
@@ -133,7 +133,7 @@ public:
 	DeviceState outputStatus();
 	DeviceState inputStatus();
 
-	bool read_rms(double frequency, int num_samples, double& rms_out);
+	static int channelId();
 
 	static std::list<DeviceId> getDevices();
 	static int chunkSize();
@@ -168,47 +168,76 @@ SharedTerminateFlag terminateRequest)
 	auto pointsIter = points.begin();
 	auto samplesIter = samples->begin(); // Iter points to a vector of samples
 
+	handle->setAnalogOutputAmplitude(Device::channelId(), 2);
+	handle->setAnalogOutputWaveform(Device::channelId(), Device::Sine);
+
 	double freq = *pointsIter;
+	handle->setAnalogOutputFrequency(Device::channelId(), freq);
+	handle->setAnalogOutputEnabled(Device::channelId(), true);
 
+	Device::DeviceState sCur, sLast = Device::Unknown;
 
+	handle->setAnalogInputAcquisitionMode(Device::Record);
+	handle->setAnalogInputRange(Device::channelId(), 5);
+	handle->setAnalogInputSamplingFreq(40000);
+	handle->setAnalogInputAcquisitionDuration(2.0); //2sec
+	handle->setAnalogInputEnabled(Device::channelId(), true);
+	handle->setAnalogInputReconfigure(true);
 
+	while(!terminateRequest->load() && pointsIter != points.end()) {
 
-	while(!terminateRequest->load() /* && pointsIter != points.end() */) {
+		// Only for debuggin
+		sCur = handle->inputStatus();
+		if (sLast != sCur) {
+			std::cout << "StateChange: " << sLast << " -> " << sCur << std::endl;
+			sLast = sCur;
+		}
 
-		if (handle->inputStatus() == Device::Done) {
+		switch (sCur) {
+		case Device::Ready: //Starting State
+			handle->setAnalogInputStart(true);
 
-			samplesIter++;	// load next samples buffer
-			pointsIter++;	// load next frequency
+			break;
+		case Device::Done:
 
+			std::cout << "f: " << freq << " Hz" << std::endl;
+			samplesIter++;	// samples buffer for next frequency
+			pointsIter++;	// next frequency
 			freq = *pointsIter;
 
+			handle->setAnalogOutputFrequency(Device::channelId(), freq);
+			handle->setAnalogOutputEnabled(Device::channelId(), true);
 
-			//handle->setOutputConfig(freq);
-			std::cout << "f: " << freq << " Hz" << std::endl;
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
+			handle->setAnalogInputStart(true);
+
+			continue;
+
+		case Device::RunningTriggered:
+
+			auto sampleState = handle->analogInSampleState();
+
+			if (sampleState.corrupted != 0 || sampleState.lost != 0) {
+
+				static int counter = 0;
+				counter++;
+				std::cout << "corrupted=" << sampleState.corrupted << " lost=" << sampleState.lost << std::endl;
+				//if (counter>5)
+				//	exit(-3);
+			}
+
+			if (sampleState.available > 0) {
+
+				//std::cout << "samplesIter.size(): " << samplesIter->size() << std::endl;
+
+				int count = sampleState.available > Device::chunkSize() ? Device::chunkSize() : sampleState.available;
+				handle->readAnalogInput(buffer, count);
+				copy(&buffer[0], &buffer[count], back_inserter(*samplesIter));
+			}
+			break;
 		}
 
-		auto sampleState = handle->analogInSampleState();
 
-		if (sampleState.corrupted != 0 || sampleState.lost != 0) {
-
-			static int counter = 0;
-			counter++;
-			std::cout << "corrupted=" << sampleState.corrupted << " lost=" << sampleState.lost << std::endl;
-			//if (counter>5)
-			//	exit(-3);
-		}
-
-		if (sampleState.available > 0) {
-#if TEST == 1
-			int count = 5;
-#else
-			int count = sampleState.available > Device::chunkSize() ? Device::chunkSize() : sampleState.available;
-#endif
-			handle->readAnalogInput(buffer, count);
-			copy(&buffer[0], &buffer[count], back_inserter(*samplesIter));
-		}
 	}
 
 	terminateRequest->store(true);

@@ -185,6 +185,14 @@ void Device::setAnalogInputAcquisitionMode(AcquisitionMode m)
 
 }
 
+void Device::setAnalogInputAcquisitionDuration(double s)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInRecordLengthSet(m_devHandle, s),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
 void Device::setAnalogInputReconfigure(bool r)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
@@ -201,81 +209,6 @@ void Device::setAnalogInputStart(bool s)
 	checkAndThrow(FDwfAnalogInConfigure(m_devHandle, false, s),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
-
-
-/////////////////////////////
-#if 0
-
-
-void Device::startAcquisition(double voltRange)
-{
-	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
-
-	// Enable input channel s_channelId = 0
-	checkAndThrow(FDwfAnalogInChannelEnableSet(m_devHandle, s_channelId, true),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-
-	checkAndThrow(FDwfAnalogInChannelRangeSet(m_devHandle, s_channelId, voltRange),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-
-	checkAndThrow(FDwfAnalogInAcquisitionModeSet(m_devHandle, acqmodeRecord),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-
-	this_thread::sleep_for(chrono::milliseconds(2));
-
-	// Start acquisition
-	checkAndThrow(FDwfAnalogInConfigure(this->m_devHandle, false, true),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-}
-
-void Device::enableOutput(double amplitude)
-{
-	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
-
-	checkAndThrow(FDwfAnalogOutNodeFunctionSet(this->m_devHandle, s_channelId, AnalogOutNodeCarrier, funcSine),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-
-	checkAndThrow(FDwfAnalogOutNodeAmplitudeSet(this->m_devHandle, s_channelId, AnalogOutNodeCarrier, amplitude),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-
-	checkAndThrow(FDwfAnalogOutNodeEnableSet(this->m_devHandle, s_channelId, AnalogOutNodeCarrier, true),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-}
-
-void Device::setOutputConfig(double signalFreq)
-{
-	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
-
-	checkAndThrow(FDwfAnalogOutNodeFrequencySet(this->m_devHandle, s_channelId, AnalogOutNodeCarrier, signalFreq),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-
-	checkAndThrow(FDwfAnalogOutConfigure(this->m_devHandle, s_channelId, true),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-}
-
-void Device::setInputConfig(double samplingFreq, double samplingDurationS)
-{
-	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
-
-	// Set input sampling frequency
-	checkAndThrow(FDwfAnalogInFrequencySet(m_devHandle, samplingFreq),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-
-	double acquiredFreq;
-	checkAndThrow(FDwfAnalogInFrequencyGet(m_devHandle, &acquiredFreq),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-	std::cout << "samplingFreq=" << acquiredFreq << std::endl;
-	checkAndThrow(FDwfAnalogInRecordLengthSet(m_devHandle, samplingDurationS),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-	double acquiredDurationS;
-	checkAndThrow(FDwfAnalogInRecordLengthGet(m_devHandle, &acquiredDurationS),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-	std::cout << "samplingDuration=" << acquiredDurationS << std::endl;
-	checkAndThrow(FDwfAnalogInConfigure(this->m_devHandle, false, true),
-				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-}
-#endif
-
 
 Device::SampleState Device::analogInSampleState()
 {
@@ -299,19 +232,19 @@ Device::SampleState Device::analogInSampleState()
 
 void Device::readAnalogInput(double *buffer, int size)
 {
-#if TEST == 1
-	static double val = 0.f;
-	for (int i=0; i<size; i++) {
-		val += 0.1;
-		buffer[i] = val;
-	}
-#else
 	checkAndThrow(FDwfAnalogInStatusData(m_devHandle, Device::s_channelId, buffer, size),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-#endif
 }
+
+//Static
+int Device::channelId()
+{
+	return Device::s_channelId;
+}
+
 
 SharedTerminateFlag createTerminateFlag()
 {
 	return SharedTerminateFlag(new std::atomic<bool>(false));
 }
+

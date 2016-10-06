@@ -17,7 +17,7 @@ void saveBuffer(const std::vector<double>& s, const std::string& fileName)
 		std::cout << "File not opened!" << std::endl;
 	}
 
-	//Indexer<double>::setStartIndex(0);
+	Indexer<double>::setStartIndex(0);
 	std::ostream_iterator<Indexer<double>> iter(outfile, "\n");
 	std::copy(s.begin(), s.end(), iter);
 	outfile.flush();
@@ -95,22 +95,10 @@ int main(int argc, char *argv[])
 	try {
 		Device dev(devs.front());
 
-		// Todo: This function names don't make sense to me. Order matters, but
-		// doesn't make sense ?!
-		//dev.enableOutput(10); //Amplitude
-
-		//double freq = 50;
-		//dev.setOutputConfig(freq);
-
-		//dev.setInputConfig(80000, -1);
-		//dev.startAcquisition(10);
-
 		auto terminate = createTerminateFlag();
 		SharedSampleStorage samples(new std::vector<std::vector<double>>(points.size()));
+#if 0
 		std::thread t1(readSamplesFunction1, &dev, points, samples, terminate);
-		//std::thread t1(readSamplesFunction2, &dev, points, samples, terminate);
-
-
 		std::cout << "Press any key for status or q to exit..." << std::endl;
 		while (getchar() != 'q' && !terminate->load()) {
 
@@ -123,6 +111,9 @@ int main(int argc, char *argv[])
 
 		terminate->store(true);
 		t1.join();
+#endif
+		readSamplesFunction1(&dev, points, samples, terminate);
+
 
 		auto s = samples->begin();
 		auto p = points.begin();
