@@ -14,6 +14,7 @@
 #include <thread>
 #include <chrono>
 #include <iostream>
+#include <cmath>
 
 class DeviceException : public std::exception {
 public:
@@ -225,41 +226,34 @@ SharedTerminateFlag terminateRequest)
 		auto ch = Device::channelId();
 
 		handle->setAnalogInputEnabled(ch, true);
-		handle->setAnalogInputRange(ch, 5);
-		handle->setAnalogInputSamplingFreq(200000);
+		handle->setAnalogInputRange(ch, 10);
+
 
 		int bufferSize = handle->analogInputGetBufferSize();
 		handle->setAnalogInputBufferSize(bufferSize);
 		double *buffer = new double[bufferSize];
 		std::cout << "Buffersize=" << bufferSize << std::endl;
 
-		//handle->setAnalogInputTriggerSource(Device::None);
-		//handle->setAnalogInputTriggerAutoTimeout(0);
-		//handle->setAnalogInputTriggerChannel(ch);
-		//handle->setAnalogInputTriggerLevel(1.0);
-		//handle->setAnalogInputTriggerCondition(Device::Rising);
-		//std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
 		handle->setAnalogInputAcquisitionMode(Device::Record);
-		handle->setAnalogInputAcquisitionDuration(0.5);
-
-		//std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		auto pointsIter = points.begin();	// frequency of measuring point
 		auto samplesIter = samples->begin(); // vector for samples of current measuring freq.
 
-		handle->setAnalogOutputAmplitude(ch, 2);
+		handle->setAnalogOutputAmplitude(ch, 10);
 		handle->setAnalogOutputWaveform(ch, Device::Sine);
 		handle->setAnalogOutputFrequency(ch, *pointsIter);
 		handle->setAnalogOutputEnabled(ch, true);
 		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
+		handle->setAnalogInputSamplingFreq(100.f * *pointsIter);
+		handle->setAnalogInputAcquisitionDuration(2 * (1 / *pointsIter));
 		handle->setAnalogInputStart(true);
 
 		while(!terminateRequest->load() && pointsIter != points.end()) {
 
 			auto deviceState = handle->analogInputStatus();
 			auto sampleState = handle->analogInSampleState();
+
 			if (deviceState == Device::Done) {
 
 				// Probably pending data?
@@ -280,8 +274,10 @@ SharedTerminateFlag terminateRequest)
 
 				handle->setAnalogOutputFrequency(ch, *pointsIter);
 				handle->setAnalogOutputEnabled(0, true);
-				//std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
+				handle->setAnalogInputSamplingFreq(100.f * *pointsIter);
+				handle->setAnalogInputAcquisitionDuration(2 * (1 / *pointsIter));
+				handle->setAnalogInputReconfigure(true);
 				handle->setAnalogInputStart(true);
 
 			} else if (deviceState == Device::RunningTriggered) {
@@ -291,8 +287,6 @@ SharedTerminateFlag terminateRequest)
 
 				if (sampleState.available)
 					Device::readSamples(handle, buffer, bufferSize, &(*samplesIter), sampleState.available);
-
-			} else if (deviceState == Device::Prefill) {
 
 			}
 

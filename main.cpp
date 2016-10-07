@@ -9,6 +9,16 @@
 
 using namespace std;
 
+double dBuForVolts(double v) {
+	static const double Uref = 0.7746;
+	return 20 * log(v / Uref);
+}
+
+double dBvForVolts(double v) {
+	static const double Uref = 1.0;
+	return 20 * log (v / Uref);
+}
+
 void saveBuffer(const std::vector<double>& s, const std::string& fileName)
 {
 	std::ofstream outfile(fileName, std::ofstream::out);
@@ -69,9 +79,9 @@ int main(int argc, char *argv[])
 
 	// Create frequency Map with measuring frequencies
 	std::vector<double>points;
-	double fMin = 20;
-	double fMax = 2000;
-	int pointsPerDecade = 5;
+	double fMin = 10;
+	double fMax = 25000;
+	int pointsPerDecade = 50;
 	createMeasuringPoints(points, pointsPerDecade, fMin, fMax);
 
 #if 0
@@ -105,7 +115,7 @@ int main(int argc, char *argv[])
 			std::cout << "InputStatus:  " << dev.analogInputStatus() << std::endl;
 			std::cout << "OutputStatus: " << dev.outputStatus() << std::endl;
 			for (auto i = samples->begin(); i!= samples->end(); ++i) {
-				std::cout << "Samples [] :" << i->size() << std::endl;
+				std::cout << "Samples [" << std::distance(samples->begin(),i) << "] :" << i->size() << std::endl;
 			}
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
@@ -119,12 +129,12 @@ int main(int argc, char *argv[])
 		std::vector<PrintablePair<double,double>> freqResp;
 
 		for (unsigned i = 0; s != samples->end(); s++, p++, i++) {
-			sprintf(buf, "%02i", i);
+			sprintf(buf, "%03i", i);
 			saveBuffer(*s, "sampledFreq_" + std::string(buf) + "_" + std::to_string(*p));
 
 			// Creates a vector containing frequency response values as ( first=freq | second=RMS )
 			freqResp.push_back(
-						PrintablePair<double,double>(*p,*max_element(s->begin(), s->end()) / sqrt(2)));
+						PrintablePair<double,double>(*p,dBuForVolts(*max_element(s->begin(), s->end()) / sqrt(2))));
 
 			std::ofstream outfile("resp.txt", std::ofstream::out);
 
