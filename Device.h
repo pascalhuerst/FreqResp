@@ -2,9 +2,6 @@
 
 #define TEST 0
 
-
-#include "sample.h"
-
 #include <list>
 #include <vector>
 #include <exception>
@@ -15,6 +12,7 @@
 #include <chrono>
 #include <iostream>
 #include <cmath>
+#include <digilent/waveforms/dwf.h>
 
 class DeviceException : public std::exception {
 public:
@@ -236,20 +234,20 @@ SharedTerminateFlag terminateRequest)
 
 		handle->setAnalogInputAcquisitionMode(Device::Record);
 
-		auto pointsIter = points.begin();	// frequency of measuring point
+		auto currentFrequency = points.begin();	// frequency of measuring point
 		auto samplesIter = samples->begin(); // vector for samples of current measuring freq.
 
 		handle->setAnalogOutputAmplitude(ch, 10);
 		handle->setAnalogOutputWaveform(ch, Device::Sine);
-		handle->setAnalogOutputFrequency(ch, *pointsIter);
+		handle->setAnalogOutputFrequency(ch, *currentFrequency);
 		handle->setAnalogOutputEnabled(ch, true);
 		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-		handle->setAnalogInputSamplingFreq(100.f * *pointsIter);
-		handle->setAnalogInputAcquisitionDuration(2 * (1 / *pointsIter));
+		handle->setAnalogInputSamplingFreq(100.f * *currentFrequency);
+		handle->setAnalogInputAcquisitionDuration(2 * (1 / *currentFrequency));
 		handle->setAnalogInputStart(true);
 
-		while(!terminateRequest->load() && pointsIter != points.end()) {
+		while(!terminateRequest->load() && currentFrequency != points.end()) {
 
 			auto deviceState = handle->analogInputStatus();
 			auto sampleState = handle->analogInSampleState();
@@ -269,14 +267,14 @@ SharedTerminateFlag terminateRequest)
 				handle->readAnalogInput(buffer, bufferSize);
 				copy(&buffer[0], &buffer[bufferSize], back_inserter(*samplesIter));
 
-				pointsIter++;
+				currentFrequency++;
 				samplesIter++;
 
-				handle->setAnalogOutputFrequency(ch, *pointsIter);
+				handle->setAnalogOutputFrequency(ch, *currentFrequency);
 				handle->setAnalogOutputEnabled(0, true);
 
-				handle->setAnalogInputSamplingFreq(100.f * *pointsIter);
-				handle->setAnalogInputAcquisitionDuration(2 * (1 / *pointsIter));
+				handle->setAnalogInputSamplingFreq(100.f * *currentFrequency);
+				handle->setAnalogInputAcquisitionDuration(2 * (1 / *currentFrequency));
 				handle->setAnalogInputReconfigure(true);
 				handle->setAnalogInputStart(true);
 
