@@ -100,7 +100,7 @@ Device::DeviceState Device::outputStatus()
 	return static_cast<Device::DeviceState>(state);
 }
 
-Device::DeviceState Device::inputStatus()
+Device::DeviceState Device::analogInputStatus()
 {
 	DwfState state;
 	checkAndThrow(FDwfAnalogInStatus(m_devHandle, s_channelId, &state),
@@ -210,6 +210,81 @@ void Device::setAnalogInputStart(bool s)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
+void Device::setAnalogInputBufferSize(int s)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInBufferSizeSet(m_devHandle, s),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void Device::setAnalogInputTriggerSource(TriggerSource t)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInTriggerSourceSet(m_devHandle, static_cast<unsigned char>(t)),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void Device::setAnalogInputTriggerAutoTimeout(double t)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInTriggerAutoTimeoutSet(m_devHandle, t),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void Device::setAnalogInputTriggerChannel(int c)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInTriggerChannelSet(m_devHandle, c),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void Device::setAnalogInputTriggerType(TriggerType t)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInTriggerTypeSet(m_devHandle, static_cast<int>(t)),
+			__PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void Device::setAnalogInputTriggerLevel(double l)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInTriggerLevelSet(m_devHandle, l),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void Device::setAnalogInputTriggerCondition(TriggerCondition t)
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfAnalogInTriggerConditionSet(m_devHandle, static_cast<int>(t)),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void Device::triggerAnalogInput()
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	checkAndThrow(FDwfDeviceTriggerPC(m_devHandle),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+int Device::analogInputGetBufferSize()
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+	int size;
+	checkAndThrow(FDwfAnalogInBufferSizeInfo(m_devHandle, nullptr, &size),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+	return size;
+}
+
+
+
 Device::SampleState Device::analogInSampleState()
 {
 	DwfState state = 0;
@@ -242,9 +317,21 @@ int Device::channelId()
 	return Device::s_channelId;
 }
 
-
+//Static
 SharedTerminateFlag createTerminateFlag()
 {
 	return SharedTerminateFlag(new std::atomic<bool>(false));
 }
 
+//Static
+void Device::readSamples(Device *handle, double *buffer, int bufferSize, std::vector<double> *target, int available)
+{
+
+	while (available) {
+		int count = available > bufferSize ? bufferSize : available;
+		handle->readAnalogInput(buffer, count);
+		copy(&buffer[0], &buffer[count], back_inserter(*target));
+		available -= count;
+	}
+
+}

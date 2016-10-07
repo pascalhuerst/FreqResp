@@ -31,14 +31,14 @@ private:
 // Helper, so I can use copy, to write the data using this
 // to add index values in csv file;
 template <class T>
-class Indexer
+class IntIndexer
 {
 public:
-	Indexer(T val) : value(val) {}
-	static void setStartIndex(int i) { Indexer<T>::index = i; }
+	IntIndexer(T val) : value(val) {}
+	static void setStartIndex(int i) { IntIndexer<T>::index = i; }
 	void Print(std::ostream& os) const
 	{
-		os << (Indexer::index++) << "," << value;
+		os << (IntIndexer::index++) << "," << value;
 	}
 private:
 	T value;
@@ -47,10 +47,30 @@ private:
 };
 
 template <class T>
-int Indexer<T>::index = 0;
+int IntIndexer<T>::index = 0;
 
 template <class T>
-std::ostream& operator<<(std::ostream& lhs, Indexer<T> const& rhs)
+std::ostream& operator<<(std::ostream& lhs, IntIndexer<T> const& rhs)
+{
+	rhs.Print(lhs);
+	return lhs;
+}
+
+template <typename A, typename B>
+class PrintablePair
+{
+public:
+	PrintablePair(A val1, B val2) : first(val1), second(val2) {}
+	void Print(std::ostream& os) const
+	{
+		os << first << "," << second;
+	}
+	A first;
+	B second;
+};
+
+template <class T>
+std::ostream& operator<<(std::ostream& lhs, PrintablePair<T,T> const& rhs)
 {
 	rhs.Print(lhs);
 	return lhs;
@@ -105,15 +125,48 @@ public:
 	void setAnalogInputAcquisitionDuration(double s);
 	void setAnalogInputReconfigure(bool r);
 	void setAnalogInputStart(bool s);
+	void setAnalogInputBufferSize(int s);
+
+	enum TriggerSource {
+		None               = 0,
+		PC                 = 1,
+		DetectorAnalogIn   = 2,
+		DetectorDigitalIn  = 3,
+		AnalogIn           = 4,
+		DigitalIn          = 5,
+		DigitalOut         = 6,
+		AnalogOut1         = 7,
+		AnalogOut2         = 8,
+		AnalogOut3         = 9,
+		AnalogOut4         = 10,
+		External1          = 11,
+		External2          = 12,
+		External3          = 13,
+		External4          = 14
+	};
+	void setAnalogInputTriggerSource(TriggerSource t);
+	//TODO: use chrono::duration here
+	void setAnalogInputTriggerAutoTimeout(double t);
+	void setAnalogInputTriggerChannel(int c);
+	enum TriggerType {
+		Edge				= 0,
+		Pulse				= 1,
+		Transistion			= 2
+	};
+	void setAnalogInputTriggerType(TriggerType t);
+	void setAnalogInputTriggerLevel(double l);
+	enum TriggerCondition {
+		Rising				= 0,
+		Falling				= 1
+	};
+	void setAnalogInputTriggerCondition(TriggerCondition c);
+	void triggerAnalogInput();
+
+
+	int analogInputGetBufferSize();
+
 
 	bool isOpen(void) const;
-
-	/*
-	void enableOutput(double amplitude); // in volts
-	void setOutputConfig(double signalFreq);
-	void startAcquisition(double voltRange);
-	void setInputConfig(double samplingFreq, double samplingDurationS);
-	*/
 
 	void readAnalogInput(double *buffer, int size);
 	SampleState analogInSampleState();
@@ -131,12 +184,13 @@ public:
 	const static std::vector<std::string> s_stateNames;
 
 	DeviceState outputStatus();
-	DeviceState inputStatus();
+	DeviceState analogInputStatus();
 
 	static int channelId();
 
 	static std::list<DeviceId> getDevices();
 	static int chunkSize();
+	static void readSamples(Device *handle, double *buffer, int bufferSize, std::vector<double> *target, int available);
 
 private:
 	HDWF m_devHandle;
@@ -157,6 +211,108 @@ std::ostream& operator<<(std::ostream& lhs, const Device::DeviceState& rhs);
 typedef std::shared_ptr<std::vector<std::vector<double>>> SharedSampleStorage;
 typedef std::shared_ptr<std::atomic<bool>> SharedTerminateFlag;
 
+
+
+auto readSamplesFunction2 = [](Device *handle,
+std::vector<double> points,
+SharedSampleStorage samples,
+SharedTerminateFlag terminateRequest)
+{
+
+	try {
+
+		// Attention: Using for in AND output, but there is a difference
+		auto ch = Device::channelId();
+
+		handle->setAnalogInputEnabled(ch, true);
+		handle->setAnalogInputRange(ch, 5);
+		handle->setAnalogInputSamplingFreq(200000);
+
+		int bufferSize = handle->analogInputGetBufferSize();
+		handle->setAnalogInputBufferSize(bufferSize);
+		double *buffer = new double[bufferSize];
+		std::cout << "Buffersize=" << bufferSize << std::endl;
+
+		//handle->setAnalogInputTriggerSource(Device::None);
+		//handle->setAnalogInputTriggerAutoTimeout(0);
+		//handle->setAnalogInputTriggerChannel(ch);
+		//handle->setAnalogInputTriggerLevel(1.0);
+		//handle->setAnalogInputTriggerCondition(Device::Rising);
+		//std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+		handle->setAnalogInputAcquisitionMode(Device::Record);
+		handle->setAnalogInputAcquisitionDuration(0.5);
+
+		//std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+		auto pointsIter = points.begin();	// frequency of measuring point
+		auto samplesIter = samples->begin(); // vector for samples of current measuring freq.
+
+		handle->setAnalogOutputAmplitude(ch, 2);
+		handle->setAnalogOutputWaveform(ch, Device::Sine);
+		handle->setAnalogOutputFrequency(ch, *pointsIter);
+		handle->setAnalogOutputEnabled(ch, true);
+		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+		handle->setAnalogInputStart(true);
+
+		while(!terminateRequest->load() && pointsIter != points.end()) {
+
+			auto deviceState = handle->analogInputStatus();
+			auto sampleState = handle->analogInSampleState();
+			if (deviceState == Device::Done) {
+
+				// Probably pending data?
+				auto sampleState = handle->analogInSampleState();
+				if (sampleState.available) {
+					Device::readSamples(handle, buffer, bufferSize, &(*samplesIter), sampleState.available);
+					std::cout << "Read another " << sampleState.available << " samples" << std::endl;
+				}
+
+				if (sampleState.corrupted != 0 || sampleState.lost != 0)
+					std::cout << "corrupted=" << sampleState.corrupted << " lost=" << sampleState.lost << std::endl;
+
+				handle->readAnalogInput(buffer, bufferSize);
+				copy(&buffer[0], &buffer[bufferSize], back_inserter(*samplesIter));
+
+				pointsIter++;
+				samplesIter++;
+
+				handle->setAnalogOutputFrequency(ch, *pointsIter);
+				handle->setAnalogOutputEnabled(0, true);
+				//std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+				handle->setAnalogInputStart(true);
+
+			} else if (deviceState == Device::RunningTriggered) {
+
+				if (sampleState.corrupted != 0 || sampleState.lost != 0)
+					std::cout << "corrupted=" << sampleState.corrupted << " lost=" << sampleState.lost << std::endl;
+
+				if (sampleState.available)
+					Device::readSamples(handle, buffer, bufferSize, &(*samplesIter), sampleState.available);
+
+			} else if (deviceState == Device::Prefill) {
+
+			}
+
+		}
+
+		terminateRequest->store(true);
+		delete[] buffer;
+
+	} catch (DeviceException e) {
+
+		std::cout << "Cought exception in: " << __PRETTY_FUNCTION__ << std::endl;
+		std::cout << "what: " << e.what() << std::endl;
+
+	}
+};
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////
 
 auto readSamplesFunction1 = [](Device *handle,
 std::vector<double> points,
@@ -179,7 +335,7 @@ SharedTerminateFlag terminateRequest)
 
 	handle->setAnalogInputAcquisitionMode(Device::Record);
 	handle->setAnalogInputRange(Device::channelId(), 5);
-	handle->setAnalogInputSamplingFreq(40000);
+	handle->setAnalogInputSamplingFreq(4000);
 	handle->setAnalogInputAcquisitionDuration(2.0); //2sec
 	handle->setAnalogInputEnabled(Device::channelId(), true);
 	handle->setAnalogInputReconfigure(true);
@@ -187,18 +343,17 @@ SharedTerminateFlag terminateRequest)
 	while(!terminateRequest->load() && pointsIter != points.end()) {
 
 		// Only for debuggin
-		sCur = handle->inputStatus();
+		sCur = handle->analogInputStatus();
 		if (sLast != sCur) {
 			std::cout << "StateChange: " << sLast << " -> " << sCur << std::endl;
 			sLast = sCur;
 		}
 
-		switch (sCur) {
-		case Device::Ready: //Starting State
+		if (sCur == Device::Ready) {
+
 			handle->setAnalogInputStart(true);
 
-			break;
-		case Device::Done:
+		} else if(sCur == Device::Done) {
 
 			std::cout << "f: " << freq << " Hz" << std::endl;
 			samplesIter++;	// samples buffer for next frequency
@@ -213,10 +368,9 @@ SharedTerminateFlag terminateRequest)
 
 			continue;
 
-		case Device::RunningTriggered:
+		} else if (sCur == Device::RunningTriggered) {
 
 			auto sampleState = handle->analogInSampleState();
-
 			if (sampleState.corrupted != 0 || sampleState.lost != 0) {
 
 				static int counter = 0;

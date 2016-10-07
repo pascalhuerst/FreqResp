@@ -17,8 +17,8 @@ void saveBuffer(const std::vector<double>& s, const std::string& fileName)
 		std::cout << "File not opened!" << std::endl;
 	}
 
-	Indexer<double>::setStartIndex(0);
-	std::ostream_iterator<Indexer<double>> iter(outfile, "\n");
+	IntIndexer<double>::setStartIndex(0);
+	std::ostream_iterator<IntIndexer<double>> iter(outfile, "\n");
 	std::copy(s.begin(), s.end(), iter);
 	outfile.flush();
 	outfile.close();
@@ -70,8 +70,8 @@ int main(int argc, char *argv[])
 	// Create frequency Map with measuring frequencies
 	std::vector<double>points;
 	double fMin = 20;
-	double fMax = 200;
-	int pointsPerDecade = 2;
+	double fMax = 2000;
+	int pointsPerDecade = 5;
 	createMeasuringPoints(points, pointsPerDecade, fMin, fMax);
 
 #if 0
@@ -97,30 +97,42 @@ int main(int argc, char *argv[])
 
 		auto terminate = createTerminateFlag();
 		SharedSampleStorage samples(new std::vector<std::vector<double>>(points.size()));
-#if 0
-		std::thread t1(readSamplesFunction1, &dev, points, samples, terminate);
-		std::cout << "Press any key for status or q to exit..." << std::endl;
-		while (getchar() != 'q' && !terminate->load()) {
 
-			std::cout << "InputStatus:  " << dev.inputStatus() << std::endl;
+		std::thread t1(readSamplesFunction2, &dev, points, samples, terminate);
+
+		while (!terminate->load()) {
+
+			std::cout << "InputStatus:  " << dev.analogInputStatus() << std::endl;
 			std::cout << "OutputStatus: " << dev.outputStatus() << std::endl;
 			for (auto i = samples->begin(); i!= samples->end(); ++i) {
 				std::cout << "Samples [] :" << i->size() << std::endl;
 			}
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 
 		terminate->store(true);
 		t1.join();
-#endif
-		readSamplesFunction1(&dev, points, samples, terminate);
-
 
 		auto s = samples->begin();
 		auto p = points.begin();
 		char buf[3];
+		std::vector<PrintablePair<double,double>> freqResp;
+
 		for (unsigned i = 0; s != samples->end(); s++, p++, i++) {
 			sprintf(buf, "%02i", i);
 			saveBuffer(*s, "sampledFreq_" + std::string(buf) + "_" + std::to_string(*p));
+
+			// Creates a vector containing frequency response values as ( first=freq | second=RMS )
+			freqResp.push_back(
+						PrintablePair<double,double>(*p,*max_element(s->begin(), s->end()) / sqrt(2)));
+
+			std::ofstream outfile("resp.txt", std::ofstream::out);
+
+			if (!outfile.is_open()) {
+				std::cout << "File not opened!" << std::endl;
+			}
+			std::ostream_iterator<PrintablePair<double,double>> iter(outfile, "\n");
+			std::copy(freqResp.begin(), freqResp.end(), iter);
 		}
 
 	} catch (DeviceException e) {
