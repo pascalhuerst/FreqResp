@@ -9,7 +9,7 @@
 using namespace std;
 
 const int Device::s_channelId = 0;
-const int Device::s_chunkSize = 1024;
+Device::DebugLevel Device::s_debugLevel = Device::DebugLevelWarning;
 
 const std::vector<std::string> Device::s_stateNames = {
 	"Ready",
@@ -20,6 +20,14 @@ const std::vector<std::string> Device::s_stateNames = {
 	"Prefill",
 	"Unknown",
 	"Wait"
+};
+
+const std::vector<std::string> Device::s_debugLevelNames = {
+	"None   ",
+	"Error  ",
+	"Warning",
+	"Debug  ",
+	"Verbose"
 };
 
 DeviceException::DeviceException(std::string func, std::string file, int line, int errorNumber, std::string what) :
@@ -33,26 +41,6 @@ DeviceException::DeviceException(std::string func, std::string file, int line, i
 const char* DeviceException::what() const noexcept
 {
 	return (m_file + ":" + m_func + ":" + std::to_string(m_line) + "(" + std::to_string(m_errno) + ")" + "\n   " + m_msg).c_str();
-}
-
-//static
-std::list<Device::DeviceId> Device::getDevices()
-{
-	int devCount;
-	FDwfEnum(enumfilterAll, &devCount);
-
-	std::list<Device::DeviceId> ret;
-	for (Device::DeviceId d = {0,0,0}; d.index<devCount; d.index++) {
-		FDwfEnumDeviceType(d.index, &d.id, &d.ver);
-		ret.push_back(d);
-	}
-	return ret;
-}
-
-//static
-int Device::chunkSize()
-{
-	return Device::s_chunkSize;
 }
 
 void Device::throwIfNotOpened(std::string func, std::string file, int line)
@@ -92,7 +80,7 @@ bool Device::isOpen(void) const
 	return m_opened;
 }
 
-Device::DeviceState Device::outputStatus()
+Device::DeviceState Device::analogOutputStatus()
 {
 	DwfState state;
 	checkAndThrow(FDwfAnalogOutStatus(m_devHandle, s_channelId, &state),
@@ -150,13 +138,33 @@ void Device::setAnalogOutputFrequency(int channel, double f)
 }
 
 
-void Device::setAnalogInputSamplingFreq(double f)
+double Device::setAnalogInputSamplingFreq(double f)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
 	checkAndThrow(FDwfAnalogInFrequencySet(m_devHandle, f),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 
+	// Stupid API using double instead of int's in millivolts
+	double actual = analogInputSamplingFreq();
+	if (!(std::fabs(f - actual) < std::numeric_limits<double>::epsilon())) {
+		std::string dbg = "Sampling Frequency Differs: desired=" + std::to_string(f) +
+					 " actual=" + std::to_string(actual);
+		debug(Device::DebugLevelDebug, dbg);
+	}
+
+	return actual;
+}
+
+double Device::analogInputSamplingFreq()
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+	double f;
+
+	checkAndThrow(FDwfAnalogInFrequencyGet(m_devHandle, &f),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	return f;
 }
 
 void Device::setAnalogInputRange(int channel, double v)
@@ -185,12 +193,32 @@ void Device::setAnalogInputAcquisitionMode(AcquisitionMode m)
 
 }
 
-void Device::setAnalogInputAcquisitionDuration(double s)
+double Device::setAnalogInputAcquisitionDuration(double s)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
 	checkAndThrow(FDwfAnalogInRecordLengthSet(m_devHandle, s),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	// Stupid API using double instead of int's in milliseconds
+	double actual = analogInputAcquisitionDuration();
+	if (!(std::fabs(s - actual) < std::numeric_limits<double>::epsilon())) {
+		std::string dbg = "Acquisition Duration Differs: desired=" + std::to_string(s) +
+		" actual=" + std::to_string(actual);
+		debug(Device::DebugLevelDebug, dbg);
+	}
+	return actual;
+}
+
+double Device::analogInputAcquisitionDuration()
+{
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	double s;
+	checkAndThrow(FDwfAnalogInRecordLengthGet(m_devHandle, &s),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	return s;
 }
 
 void Device::setAnalogInputReconfigure(bool r)
@@ -274,7 +302,7 @@ void Device::triggerAnalogInput()
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-int Device::analogInputGetBufferSize()
+int Device::analogInputBufferSize()
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 	int size;
@@ -311,6 +339,20 @@ void Device::readAnalogInput(double *buffer, int size)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
+//static
+std::list<Device::DeviceId> Device::getDevices()
+{
+	int devCount;
+	FDwfEnum(enumfilterAll, &devCount);
+
+	std::list<Device::DeviceId> ret;
+	for (Device::DeviceId d = {0,0,0}; d.index<devCount; d.index++) {
+		FDwfEnumDeviceType(d.index, &d.id, &d.ver);
+		ret.push_back(d);
+	}
+	return ret;
+}
+
 //Static
 int Device::channelId()
 {
@@ -318,9 +360,16 @@ int Device::channelId()
 }
 
 //Static
-SharedTerminateFlag createTerminateFlag()
+Device::DebugLevel Device::debugLevel()
 {
-	return SharedTerminateFlag(new std::atomic<bool>(false));
+	return s_debugLevel;
+}
+
+//Static
+void Device::debug(DebugLevel level, const std::string& msg)
+{
+	if (debugLevel() >= level)
+		std::cout << "[" << Device::s_debugLevelNames[level] << "]: " << msg << std::endl;
 }
 
 //Static
@@ -334,4 +383,9 @@ void Device::readSamples(Device *handle, double *buffer, int bufferSize, std::ve
 		available -= count;
 	}
 
+}
+
+SharedTerminateFlag createTerminateFlag()
+{
+	return SharedTerminateFlag(new std::atomic<bool>(false));
 }

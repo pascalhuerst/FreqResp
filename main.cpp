@@ -63,7 +63,6 @@ void createMeasuringPoints(std::vector<double>& points, int pointsPerDecade, dou
 	std::sort(points.begin(), points.end());
 }
 
-
 int main(int argc, char *argv[])
 {
 
@@ -79,9 +78,9 @@ int main(int argc, char *argv[])
 
 	// Create frequency Map with measuring frequencies
 	std::vector<double>points;
-	double fMin = 10;
-	double fMax = 25000;
-	int pointsPerDecade = 50;
+	double fMin = 20;
+	double fMax = 20000;
+	int pointsPerDecade = 100;
 	createMeasuringPoints(points, pointsPerDecade, fMin, fMax);
 
 #if 0
@@ -112,10 +111,11 @@ int main(int argc, char *argv[])
 
 		while (!terminate->load()) {
 
-			std::cout << "InputStatus:  " << dev.analogInputStatus() << std::endl;
-			std::cout << "OutputStatus: " << dev.outputStatus() << std::endl;
+			//std::cout << "InputStatus:  " << dev.analogInputStatus() << std::endl;
+			//std::cout << "OutputStatus: " << dev.outputStatus() << std::endl;
 			for (auto i = samples->begin(); i!= samples->end(); ++i) {
-				std::cout << "Samples [" << std::distance(samples->begin(),i) << "] :" << i->size() << std::endl;
+				if (!i->empty())
+					std::cout << "Samples [" << std::distance(samples->begin(),i) << "] :" << i->size() << std::endl;
 			}
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
@@ -135,6 +135,7 @@ int main(int argc, char *argv[])
 			// Creates a vector containing frequency response values as ( first=freq | second=RMS )
 			freqResp.push_back(
 						PrintablePair<double,double>(*p,dBuForVolts(*max_element(s->begin(), s->end()) / sqrt(2))));
+						//PrintablePair<double,double>(*p,*max_element(s->begin(), s->end()) / sqrt(2)));
 
 			std::ofstream outfile("resp.txt", std::ofstream::out);
 
