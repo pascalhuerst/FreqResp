@@ -19,6 +19,17 @@ double dBvForVolts(double v) {
 	return 20 * log (v / Uref);
 }
 
+double rms(const std::vector<double>& samples)
+{
+	double rms;
+	for (auto sample : samples) {
+	//for (auto sample=samples.begin(); sample!=samples.end(); ++sample) {
+		rms += sample * sample;
+		rms = sqrt(rms / samples.size());
+	}
+	return rms;
+}
+
 void saveBuffer(const std::vector<double>& s, const std::string& fileName)
 {
 	std::ofstream outfile(fileName, std::ofstream::out);
@@ -103,6 +114,7 @@ int main(int argc, char *argv[])
 
 	try {
 		Device dev(devs.front());
+		std::cout << "Version: " << dev.version() << std::endl;
 
 		auto terminate = createTerminateFlag();
 		SharedSampleStorage samples(new std::vector<std::vector<double>>(points.size()));
@@ -112,12 +124,12 @@ int main(int argc, char *argv[])
 		while (!terminate->load()) {
 
 			//std::cout << "InputStatus:  " << dev.analogInputStatus() << std::endl;
-			//std::cout << "OutputStatus: " << dev.outputStatus() << std::endl;
+			//std::cout << "OutputStatus: " << dev.analogOutputStatus() << std::endl;
 			for (auto i = samples->begin(); i!= samples->end(); ++i) {
 				if (!i->empty())
 					std::cout << "Samples [" << std::distance(samples->begin(),i) << "] :" << i->size() << std::endl;
 			}
-			std::this_thread::sleep_for(std::chrono::seconds(1));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 		}
 
 		terminate->store(true);
@@ -134,8 +146,10 @@ int main(int argc, char *argv[])
 
 			// Creates a vector containing frequency response values as ( first=freq | second=RMS )
 			freqResp.push_back(
-						PrintablePair<double,double>(*p,dBuForVolts(*max_element(s->begin(), s->end()) / sqrt(2))));
-						//PrintablePair<double,double>(*p,*max_element(s->begin(), s->end()) / sqrt(2)));
+						// Find max and divide by sqrt(2) to get RMS
+						//PrintablePair<double,double>(*p,dBuForVolts(*max_element(s->begin(), s->end()) / sqrt(2))));
+						// calculate RMS from samples
+						PrintablePair<double,double>(*p, dBuForVolts(rms(*s))));
 
 			std::ofstream outfile("resp.txt", std::ofstream::out);
 

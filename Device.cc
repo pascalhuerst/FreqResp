@@ -62,17 +62,27 @@ void Device::checkAndThrow(bool ret, std::string func, std::string file, int lin
 	}
 }
 
-
-
 Device::Device(const DeviceId &device)
 {
 	m_opened = (FDwfDeviceOpen(device.index, &m_devHandle) != 0);
+
+	char v[32];
+
+	if (m_opened)
+		FDwfGetVersion(v);
+
+	m_version = std::string(v);
 }
 
 Device::~Device(void)
 {
 	if (isOpen())
 		FDwfDeviceClose(m_devHandle);
+}
+
+std::string Device::version()
+{
+	return m_version;
 }
 
 bool Device::isOpen(void) const
@@ -96,10 +106,8 @@ Device::DeviceState Device::analogInputStatus()
 	return static_cast<Device::DeviceState>(state);
 }
 
-std::ostream& operator<<(std::ostream& lhs, const Device::DeviceState& rhs)
-{
-	return lhs << Device::s_stateNames[rhs];
-}
+
+
 
 void Device::setAnalogOutputWaveform(int channel, Device::Waveform w)
 {
@@ -311,8 +319,6 @@ int Device::analogInputBufferSize()
 	return size;
 }
 
-
-
 Device::SampleState Device::analogInSampleState()
 {
 	DwfState state = 0;
@@ -320,12 +326,6 @@ Device::SampleState Device::analogInSampleState()
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 
 	Device::SampleState ret = {-1, -1, -1};
-#if 0
-	// These flags seem to be obsolete ?!
-	if(state == stsCfg || state == stsPrefill || state == stsArm){
-		return ret;
-	}
-#endif
 
 	checkAndThrow(FDwfAnalogInStatusRecord(m_devHandle, &ret.available, &ret.lost, &ret.corrupted),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
@@ -339,7 +339,7 @@ void Device::readAnalogInput(double *buffer, int size)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-//static
+//Static
 std::list<Device::DeviceId> Device::getDevices()
 {
 	int devCount;
@@ -375,7 +375,6 @@ void Device::debug(DebugLevel level, const std::string& msg)
 //Static
 void Device::readSamples(Device *handle, double *buffer, int bufferSize, std::vector<double> *target, int available)
 {
-
 	while (available) {
 		int count = available > bufferSize ? bufferSize : available;
 		handle->readAnalogInput(buffer, count);
@@ -388,4 +387,16 @@ void Device::readSamples(Device *handle, double *buffer, int bufferSize, std::ve
 SharedTerminateFlag createTerminateFlag()
 {
 	return SharedTerminateFlag(new std::atomic<bool>(false));
+}
+
+std::ostream& operator<<(std::ostream& lhs, const Device::DeviceState& rhs)
+{
+	return lhs << Device::s_stateNames[rhs];
+}
+
+std::ostream& operator<<(std::ostream& lhs, const Device::SampleState& rhs)
+{
+	return lhs << "available=" << rhs.available
+			   << " lost=" << rhs.lost
+			   << " corrupted=" << rhs.corrupted;
 }

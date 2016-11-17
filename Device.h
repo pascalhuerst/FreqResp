@@ -93,6 +93,8 @@ public:
 	Device(const DeviceId& device);
 	~Device(void);
 
+	std::string version();
+
 	enum Waveform {
 		WaveformDc				= 0,
 		WaveformSine			= 1,
@@ -206,112 +208,72 @@ public:
 private:
 	HDWF m_devHandle;
 	bool m_opened;
+	std::string m_version;
 
 	const static int s_channelId;
 	static DebugLevel s_debugLevel;
 
 	void throwIfNotOpened(std::string func, std::string file, int line);
 	void checkAndThrow(bool ret, std::string func, std::string file, int line);
-
-
 };
 
 std::ostream& operator<<(std::ostream& lhs, const Device::DeviceState& rhs);
+std::ostream& operator<<(std::ostream& lhs, const Device::SampleState& rhs);
 
 // Thread function, that polls and reads the inputbuffer
 typedef std::shared_ptr<std::vector<std::vector<double>>> SharedSampleStorage;
 typedef std::shared_ptr<std::atomic<bool>> SharedTerminateFlag;
 
-
-auto readSamplesFunction2 = [](Device *handle,
-std::vector<double> points,
-SharedSampleStorage samples,
-SharedTerminateFlag terminateRequest)
+auto readOneBuffer = [](Device *handle, double currentFrequency)
 {
-	const double oversampling = 1000.0;
-	const int periodesToMeasure = 4;
-	const double outputAmplitude = 0.05;
+	const double oversampling = 100.0;
+	const int desiredSampleCount = 8192;
+	const int periodes = 20;
 	// Attention: Using for in AND output, but there is a difference
 	auto ch = Device::channelId();
+	double *buffer;
+
+	std::vector<double> samples;
 
 	try {
 
 		handle->setAnalogInputEnabled(ch, true);
-		handle->setAnalogInputRange(ch, 10);
+		handle->setAnalogInputRange(ch, 5);
 
+		handle->setAnalogInputBufferSize(desiredSampleCount);
 		int bufferSize = handle->analogInputBufferSize();
-		handle->setAnalogInputBufferSize(bufferSize);
-		double *buffer = new double[bufferSize];
-		std::cout << "Buffersize=" << bufferSize << std::endl;
+		buffer = new double[bufferSize];
 
 		handle->setAnalogInputAcquisitionMode(Device::AcquisitionModeRecord);
 
-		auto currentFrequency = points.begin();	// frequency of measuring point
-		auto samplesIter = samples->begin(); // vector for samples of current measuring freq.
-
-		handle->setAnalogOutputAmplitude(ch, outputAmplitude);
-		handle->setAnalogOutputWaveform(ch, Device::WaveformSine);
-		handle->setAnalogOutputFrequency(ch, *currentFrequency);
-		handle->setAnalogOutputEnabled(ch, true);
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-		double desiredSamplingFrequency = oversampling * *currentFrequency;
+		double desiredSamplingFrequency = oversampling * currentFrequency;
 		handle->setAnalogInputSamplingFreq(desiredSamplingFrequency);
-		handle->setAnalogInputAcquisitionDuration(periodesToMeasure * (1 / *currentFrequency));
+		handle->setAnalogInputAcquisitionDuration(1.0 / currentFrequency * periodes);
 		handle->setAnalogInputStart(true);
 
-		while(!terminateRequest->load() && currentFrequency != points.end()) {
+		auto deviceState = Device::DeviceStateUnknown;
 
-			auto deviceState = handle->analogInputStatus();
+		do {
 			auto sampleState = handle->analogInSampleState();
+			if (sampleState.corrupted != 0 || sampleState.lost != 0)
+				std::cout << sampleState << std::endl;
 
-			if (deviceState == Device::DeviceStateDone) {
+			if (!sampleState.available)
+				deviceState = handle->analogInputStatus();
 
-				// Probably pending data?
-				auto sampleState = handle->analogInSampleState();
-				if (sampleState.corrupted != 0 || sampleState.lost != 0) {
-					std::string dbg = "corrupted=" + std::to_string(sampleState.corrupted)
-												   + " lost=" + std::to_string(sampleState.lost);
-					Device::debug(Device::DebugLevelWarning, dbg);
-				}
+			if (sampleState.available)
+				Device::readSamples(handle, buffer, bufferSize, &samples, sampleState.available);
 
-
-				handle->readAnalogInput(buffer, bufferSize);
-				copy(&buffer[0], &buffer[bufferSize], back_inserter(*samplesIter));
-
-				currentFrequency++;
-				samplesIter++;
-
-				handle->setAnalogOutputFrequency(ch, *currentFrequency);
-				handle->setAnalogOutputEnabled(0, true);
-
-				handle->setAnalogInputSamplingFreq(oversampling * *currentFrequency);
-				handle->setAnalogInputAcquisitionDuration(periodesToMeasure * (1 / *currentFrequency));
-				handle->setAnalogInputReconfigure(true);
-				handle->setAnalogInputStart(true);
-
-			} else if (deviceState == Device::DeviceStateRunningTriggered) {
-
-				if (sampleState.corrupted != 0 || sampleState.lost != 0)
-					std::cout << "corrupted=" << sampleState.corrupted << " lost=" << sampleState.lost << std::endl;
-
-				if (sampleState.available)
-					Device::readSamples(handle, buffer, bufferSize, &(*samplesIter), sampleState.available);
-
-			}
-
-		}
-
-		terminateRequest->store(true);
-		delete[] buffer;
-
+		} while (deviceState != Device::DeviceStateDone);
 	} catch (DeviceException e) {
 
 		std::cout << "Cought exception in: " << __PRETTY_FUNCTION__ << std::endl;
 		std::cout << "what: " << e.what() << std::endl;
-
 	}
-};
 
+	delete[] buffer;
+
+	return samples;
+};
 
 SharedTerminateFlag createTerminateFlag();
