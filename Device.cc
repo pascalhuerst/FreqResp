@@ -33,9 +33,9 @@ const std::vector<std::string> Device::s_debugLevelNames = {
 DeviceException::DeviceException(std::string func, std::string file, int line, int errorNumber, std::string what) :
 	m_func(func),
 	m_file(file),
+	m_msg(what),
 	m_line(line),
-	m_errno(errorNumber),
-	m_msg(what)
+  m_errno(errorNumber)
 {}
 
 const char* DeviceException::what() const noexcept

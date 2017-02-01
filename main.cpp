@@ -21,9 +21,8 @@ double dBvForVolts(double v) {
 
 double rms(const std::vector<double>& samples)
 {
-	double rms;
+	double rms = 0.0;
 	for (auto sample : samples) {
-	//for (auto sample=samples.begin(); sample!=samples.end(); ++sample) {
 		rms += sample * sample;
 		rms = sqrt(rms / samples.size());
 	}
@@ -74,6 +73,77 @@ void createMeasuringPoints(std::vector<double>& points, int pointsPerDecade, dou
 	std::sort(points.begin(), points.end());
 }
 
+void run(SharedTerminateFlag terminateRequest)
+{
+	auto devs = Device::getDevices();
+	if (devs.empty()) {
+		std::cout << "No devices Found!" << std::endl;
+		exit(0);
+	}
+
+	std::cout << "Found " << devs.size() << " devices. Opening " <<
+				 devs.front().id << " [" << devs.front().ver << "]" << std::endl;
+
+	Device dev(devs.front());
+
+	// Create frequency Map with measuring frequencies
+	std::vector<double>points;
+	double fMin = 20;
+	double fMax = 20000;
+	int pointsPerDecade = 100;
+	createMeasuringPoints(points, pointsPerDecade, fMin, fMax);
+
+	saveBuffer(points, "fMeasuringPoints.txt");
+
+	std::vector<double>freqResp(points.size());
+
+	try {
+
+		const int channel = 0;
+		dev.setAnalogOutputAmplitude(channel, 0.2); // 200mV
+		dev.setAnalogOutputWaveform(channel, Device::WaveformSine);
+
+		auto currentFrequency = points.begin();
+		auto currentFreqResp = freqResp.begin();
+
+		while (!terminateRequest->load() && currentFrequency != points.end()) {
+
+			dev.setAnalogOutputFrequency(channel, *currentFrequency);
+			dev.setAnalogOutputEnabled(channel, true);
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+			auto samples = readOneBuffer(&dev, *currentFrequency);
+
+			// Remove upper and lower 10% leads to better results
+			int removeCount = samples.size() * 0.1;
+			samples.erase(samples.begin(), samples.begin()+removeCount);
+			samples.erase(samples.end()-removeCount, samples.end());
+
+			std::vector<double> keys(samples.size());
+			std::iota(std::begin(keys), std::end(keys), 0);
+			w->updateSineGraph(keys, samples);
+
+			*currentFreqResp = dBuForVolts(rms(samples));
+			w->updateFreqGraph(points, freqResp);
+
+			std::cout << "[" << std::distance(points.begin(), currentFrequency)
+					  << "] dBu @ " << double(*currentFrequency)
+					  << "Hz: " << *currentFreqResp << std::endl;
+
+			currentFrequency++;
+			currentFreqResp++;
+
+		}
+	} catch(DeviceException e) {
+		std::cout << "e.what(): " << e.what() << std::endl;
+	} catch (std::exception e) {
+		std::cout << "e.what(): " << e.what() << std::endl;
+	}
+}
+
+
+
+
 int main(int argc, char *argv[])
 {
 
@@ -119,7 +189,7 @@ int main(int argc, char *argv[])
 		auto terminate = createTerminateFlag();
 		SharedSampleStorage samples(new std::vector<std::vector<double>>(points.size()));
 
-		std::thread t1(readSamplesFunction2, &dev, points, samples, terminate);
+		std::thread t1(readOneBuffer, &dev, points, samples, terminate);
 
 		while (!terminate->load()) {
 
@@ -165,8 +235,6 @@ int main(int argc, char *argv[])
 	} catch (std::exception e) {
 		std::cout << "e.what(): " << e.what() << std::endl;
 	}
-
-
 
 	return 0;
 }

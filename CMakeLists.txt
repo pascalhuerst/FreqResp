@@ -1,6 +1,7 @@
 project(FreqResp)
 cmake_minimum_required(VERSION 2.8)
-aux_source_directory(. SRC_LIST)
+
+set(SRC_LIST Device.cc main.cpp)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     add_definitions(-std=c++11)

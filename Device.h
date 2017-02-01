@@ -22,13 +22,12 @@ public:
 private:
 	std::string m_func;
 	std::string m_file;
+	std::string m_msg;
 	int m_line;
 	int m_errno;
-	std::string m_msg;
 };
 
-// Helper, so I can use copy, to write the data using this
-// to add index values in csv file;
+// Helper, so I can use copy(), to write data with and index values in a csv file;
 template <class T>
 class IntIndexer
 {
@@ -165,10 +164,7 @@ public:
 	void setAnalogInputTriggerCondition(TriggerCondition c);
 	void triggerAnalogInput();
 
-
 	int analogInputBufferSize();
-
-
 	bool isOpen(void) const;
 
 	void readAnalogInput(double *buffer, int size);
@@ -220,16 +216,16 @@ private:
 std::ostream& operator<<(std::ostream& lhs, const Device::DeviceState& rhs);
 std::ostream& operator<<(std::ostream& lhs, const Device::SampleState& rhs);
 
-// Thread function, that polls and reads the inputbuffer
 typedef std::shared_ptr<std::vector<std::vector<double>>> SharedSampleStorage;
 typedef std::shared_ptr<std::atomic<bool>> SharedTerminateFlag;
 
+// Thread function, that polls and reads the inputbuffer
 auto readOneBuffer = [](Device *handle, double currentFrequency)
 {
 	const double oversampling = 100.0;
 	const int desiredSampleCount = 8192;
 	const int periodes = 20;
-	// Attention: Using for in AND output, but there is a difference
+	// Attention: Using for input AND output, but there is a difference
 	auto ch = Device::channelId();
 	double *buffer;
 
