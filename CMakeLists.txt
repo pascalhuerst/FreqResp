@@ -12,3 +12,7 @@ link_directories(/usr/lib64/)
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 target_link_libraries(${PROJECT_NAME} dwf)
 target_link_libraries(${PROJECT_NAME} pthread)
+
+INSTALL(TARGETS ${PROJECT_NAME}
+	RUNTIME DESTINATION sbin 
+)
