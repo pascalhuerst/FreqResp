@@ -5,8 +5,10 @@
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+#include <list>
 
 #include "analogdiscovery.h"
+#include "gpio.h"
 
 using namespace std;
 
@@ -142,6 +144,48 @@ void run(SharedTerminateFlag terminateRequest)
 	}
 }
 
+std::list<SharedGPIOHandle> loadGPIOMapping(std::shared_ptr<AnalogDiscovery> analogDiscovery)
+{
+	std::list<SharedGPIOHandle> gpios;
+
+	// Analog Discovery GPIOs
+	// Outputs
+	gpios.push_back(createGPIO("Front_LED_1", analogDiscovery, 0, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Front_LED_2", analogDiscovery, 1, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Front_LED_3", analogDiscovery, 2, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Front_LED_4", analogDiscovery, 3, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Front_LED_5", analogDiscovery, 4, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Relais_K109", analogDiscovery, 10, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Relais_K108", analogDiscovery, 11, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Relais_K104", analogDiscovery, 12, GPIO::DirectionOut, false));
+
+	// Load is switched thru a multiplexer. Speaker outputs can not shortcirquid!
+	// So we have one nEn and two ADR lines here
+	gpios.push_back(createGPIO("ADR0", analogDiscovery, 13, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("ADR1", analogDiscovery, 14, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("nEnable", analogDiscovery, 15, GPIO::DirectionOut, true));
+
+	// MinnowBoard GPIOs
+	// Outputs
+	gpios.push_back(createGPIO("Volume Button +", 477, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Volume Button -", 478, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Enc3", 479, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Station1 Button", 472, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Station2 Button", 473, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Station3 Button", 485, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Station4 Button", 475, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Power Button", 484, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Reset Button", 474, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Setup Button", 338, GPIO::DirectionOut, false));
+	// Inputs
+	gpios.push_back(createGPIO("Led 1", 509, GPIO::DirectionIn, false));
+	gpios.push_back(createGPIO("Led 2", 340, GPIO::DirectionIn, false));
+	gpios.push_back(createGPIO("Led 3", 505, GPIO::DirectionIn, false));
+	gpios.push_back(createGPIO("Led 4", 339, GPIO::DirectionIn, false));
+	gpios.push_back(createGPIO("Led 5", 504, GPIO::DirectionIn, false));
+
+	return gpios;
+}
 
 
 
@@ -175,26 +219,50 @@ int main(int argc, char *argv[])
 	std::cout << "Found " << devs.size() << " devices. Opening " <<
 				 devs.front().id << " [" << devs.front().ver << "]" << std::endl;
 
-	AnalogDiscovery dev(devs.front());
+	std::shared_ptr<AnalogDiscovery> sharedDev(new AnalogDiscovery(devs.front()));
 
-	for (int i=0; i<16; i++) {
+	auto gpios = loadGPIOMapping(sharedDev);
+	manualTest(gpios);
 
-		dev.setDigitalIoDirection(i, AnalogDiscovery::IODirectionOut);
-		dev.setDigitalIo(i, 0);
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
-		dev.setDigitalIo(i, 1);
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+
+#if 0
+	std::cout << "GPIO1 is: " << (gpio1->getDirection() == GPIO::DirectionIn ? "Input" : "Output") << std::endl;
+	std::cout << "GPIO1 is: " << (gpio1->getValue() ? "Hi" : "Lo") << std::endl;
+	std::cout << "GPIO2 is: " << (gpio2->getDirection() == GPIO::DirectionIn ? "Input" : "Output") << std::endl;
+	std::cout << "GPIO2 is: " << (gpio2->getValue() ? "Hi" : "Lo") << std::endl;
+
+	std::cout << "Press Key" << std::endl;
+	getchar();
+
+	for (int i=0; i<4; i++) {
+
+		std::cout << "gpio2->setValue(true);" << std::endl;
+		gpio2->setValue(true);
+		std::cout << "gpio1->setValue(true);" << std::endl;
+		gpio1->setValue(true);
+
+		getchar();
+
+		std::cout << "gpio2->setValue(false);" << std::endl;
+		gpio2->setValue(false);
+		std::cout << "gpio1->setValue(false);" << std::endl;
+		gpio1->setValue(false);
+
+		getchar();
+
 	}
 
-	for (int i=0; i<16; i++) {
+	std::cout << "Behind loop" << std::endl;
+#endif
+
+	getchar();
+
+	return 0;
 
 
-		dev.setDigitalIoDirection(i, AnalogDiscovery::IODirectionIn);
 
-	}
-
-
-
+#if 0
 
 	return 0;
 
@@ -211,4 +279,6 @@ int main(int argc, char *argv[])
 	t1.join();
 
 	return 0;
+#endif
+
 }
