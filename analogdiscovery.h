@@ -14,17 +14,17 @@
 #include <cmath>
 #include <digilent/waveforms/dwf.h>
 
-class DeviceException : public std::exception {
+class AnalogDiscoveryException : public std::exception {
 public:
-	DeviceException(std::string func, std::string file, int line, int errorNumber, std::string what);
+	AnalogDiscoveryException(std::string func, std::string file, int line, int errorNumber, std::string what);
 	virtual const char* what() const noexcept;
 
-private:
 	std::string m_func;
 	std::string m_file;
 	std::string m_msg;
 	int m_line;
 	int m_errno;
+private:
 };
 
 // Helper, so I can use copy(), to write data with and index values in a csv file;
@@ -75,7 +75,7 @@ std::ostream& operator<<(std::ostream& lhs, PrintablePair<T,T> const& rhs)
 }
 
 
-class Device {
+class AnalogDiscovery {
 public:
 	struct DeviceId {
 		int index;
@@ -89,8 +89,8 @@ public:
 		int corrupted;
 	};
 
-	Device(const DeviceId& device);
-	~Device(void);
+	AnalogDiscovery(const DeviceId& device);
+	~AnalogDiscovery(void);
 
 	std::string version();
 
@@ -188,7 +188,20 @@ public:
 	static int channelId();
 
 	static std::list<DeviceId> getDevices();
-	static void readSamples(Device *handle, double *buffer, int bufferSize, std::vector<double> *target, int available);
+	static void readSamples(AnalogDiscovery *handle, double *buffer, int bufferSize, std::vector<double> *target, int available);
+
+	// Digital IO
+	enum IODirection {
+		IODirectionIn = 0x01,
+		IODirectionOut = 0x00
+	};
+	void setDigitalIoDirection(int pin, IODirection d);
+
+
+
+	void setDigitalIo(int pin, bool value);
+
+
 
 	enum DebugLevel {
 		DebugLevelNone		= 0,
@@ -198,8 +211,8 @@ public:
 		DebugLevelVerbose	= 4
 	};
 	const static std::vector<std::string> s_debugLevelNames;
-	static void debug(Device::DebugLevel level, const std::string& msg);
-	static Device::DebugLevel debugLevel();
+	static void debug(AnalogDiscovery::DebugLevel level, const std::string& msg);
+	static AnalogDiscovery::DebugLevel debugLevel();
 
 private:
 	HDWF m_devHandle;
@@ -213,20 +226,20 @@ private:
 	void checkAndThrow(bool ret, std::string func, std::string file, int line);
 };
 
-std::ostream& operator<<(std::ostream& lhs, const Device::DeviceState& rhs);
-std::ostream& operator<<(std::ostream& lhs, const Device::SampleState& rhs);
+std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::DeviceState& rhs);
+std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::SampleState& rhs);
 
 typedef std::shared_ptr<std::vector<std::vector<double>>> SharedSampleStorage;
 typedef std::shared_ptr<std::atomic<bool>> SharedTerminateFlag;
 
 // Thread function, that polls and reads the inputbuffer
-auto readOneBuffer = [](Device *handle, double currentFrequency)
+auto readOneBuffer = [](AnalogDiscovery *handle, double currentFrequency)
 {
 	const double oversampling = 100.0;
 	const int desiredSampleCount = 8192;
 	const int periodes = 20;
 	// Attention: Using for input AND output, but there is a difference
-	auto ch = Device::channelId();
+	auto ch = AnalogDiscovery::channelId();
 	double *buffer;
 
 	std::vector<double> samples;
@@ -240,14 +253,14 @@ auto readOneBuffer = [](Device *handle, double currentFrequency)
 		int bufferSize = handle->analogInputBufferSize();
 		buffer = new double[bufferSize];
 
-		handle->setAnalogInputAcquisitionMode(Device::AcquisitionModeRecord);
+		handle->setAnalogInputAcquisitionMode(AnalogDiscovery::AcquisitionModeRecord);
 
 		double desiredSamplingFrequency = oversampling * currentFrequency;
 		handle->setAnalogInputSamplingFreq(desiredSamplingFrequency);
 		handle->setAnalogInputAcquisitionDuration(1.0 / currentFrequency * periodes);
 		handle->setAnalogInputStart(true);
 
-		auto deviceState = Device::DeviceStateUnknown;
+		auto deviceState = AnalogDiscovery::DeviceStateUnknown;
 
 		do {
 			auto sampleState = handle->analogInSampleState();
@@ -258,10 +271,11 @@ auto readOneBuffer = [](Device *handle, double currentFrequency)
 				deviceState = handle->analogInputStatus();
 
 			if (sampleState.available)
-				Device::readSamples(handle, buffer, bufferSize, &samples, sampleState.available);
+				AnalogDiscovery::readSamples(handle, buffer, bufferSize, &samples, sampleState.available);
 
-		} while (deviceState != Device::DeviceStateDone);
-	} catch (DeviceException e) {
+		} while (deviceState != AnalogDiscovery::DeviceStateDone);
+
+	} catch (AnalogDiscoveryException e) {
 
 		std::cout << "Cought exception in: " << __PRETTY_FUNCTION__ << std::endl;
 		std::cout << "what: " << e.what() << std::endl;

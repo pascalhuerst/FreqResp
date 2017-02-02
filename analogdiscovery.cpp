@@ -1,4 +1,4 @@
-#include "Device.h"
+#include "analogdiscovery.h"
 #include <iostream>
 #include <math.h>
 #include <unistd.h>
@@ -8,10 +8,10 @@
 
 using namespace std;
 
-const int Device::s_channelId = 0;
-Device::DebugLevel Device::s_debugLevel = Device::DebugLevelWarning;
+const int AnalogDiscovery::s_channelId = 0;
+AnalogDiscovery::DebugLevel AnalogDiscovery::s_debugLevel = AnalogDiscovery::DebugLevelWarning;
 
-const std::vector<std::string> Device::s_stateNames = {
+const std::vector<std::string> AnalogDiscovery::s_stateNames = {
 	"Ready",
 	"Armed",
 	"Done",
@@ -22,7 +22,7 @@ const std::vector<std::string> Device::s_stateNames = {
 	"Wait"
 };
 
-const std::vector<std::string> Device::s_debugLevelNames = {
+const std::vector<std::string> AnalogDiscovery::s_debugLevelNames = {
 	"None   ",
 	"Error  ",
 	"Warning",
@@ -30,26 +30,26 @@ const std::vector<std::string> Device::s_debugLevelNames = {
 	"Verbose"
 };
 
-DeviceException::DeviceException(std::string func, std::string file, int line, int errorNumber, std::string what) :
+AnalogDiscoveryException::AnalogDiscoveryException(std::string func, std::string file, int line, int errorNumber, std::string what) :
 	m_func(func),
 	m_file(file),
 	m_msg(what),
 	m_line(line),
-  m_errno(errorNumber)
+	m_errno(errorNumber)
 {}
 
-const char* DeviceException::what() const noexcept
+const char* AnalogDiscoveryException::what() const noexcept
 {
 	return (m_file + ":" + m_func + ":" + std::to_string(m_line) + "(" + std::to_string(m_errno) + ")" + "\n   " + m_msg).c_str();
 }
 
-void Device::throwIfNotOpened(std::string func, std::string file, int line)
+void AnalogDiscovery::throwIfNotOpened(std::string func, std::string file, int line)
 {
 	if (!m_opened)
-		throw DeviceException(func, file, line, 0, "Device not opened");
+		throw AnalogDiscoveryException(func, file, line, 0, "Device not opened");
 }
 
-void Device::checkAndThrow(bool ret, std::string func, std::string file, int line)
+void AnalogDiscovery::checkAndThrow(bool ret, std::string func, std::string file, int line)
 {
 	if (!ret) {
 		DWFERC pdwferc;
@@ -58,58 +58,71 @@ void Device::checkAndThrow(bool ret, std::string func, std::string file, int lin
 		char szError[512];
 		FDwfGetLastErrorMsg(szError);
 
-		throw DeviceException(func, file, line, pdwferc, szError);
+		throw AnalogDiscoveryException(func, file, line, pdwferc, szError);
 	}
 }
 
-Device::Device(const DeviceId &device)
+AnalogDiscovery::AnalogDiscovery(const DeviceId &device)
 {
 	m_opened = (FDwfDeviceOpen(device.index, &m_devHandle) != 0);
 
 	char v[32];
 
-	if (m_opened)
+	if (m_opened) {
 		FDwfGetVersion(v);
+	} else {
+		std::cout << "Device NOT opened. Error!" << std::endl;
+
+		DWFERC pdwferc;
+		FDwfGetLastError(&pdwferc);
+
+		char szError[512];
+		FDwfGetLastErrorMsg(szError);
+
+		std::cout << "pdwferc: " << pdwferc << " msg: " << szError << std::endl;
+
+	}
+
 
 	m_version = std::string(v);
 }
 
-Device::~Device(void)
+AnalogDiscovery::~AnalogDiscovery(void)
 {
 	if (isOpen())
 		FDwfDeviceClose(m_devHandle);
 }
 
-std::string Device::version()
+std::string AnalogDiscovery::version()
 {
 	return m_version;
 }
 
-bool Device::isOpen(void) const
+bool AnalogDiscovery::isOpen(void) const
 {
 	return m_opened;
 }
 
-Device::DeviceState Device::analogOutputStatus()
+AnalogDiscovery::DeviceState AnalogDiscovery::analogOutputStatus()
 {
 	DwfState state;
 	checkAndThrow(FDwfAnalogOutStatus(m_devHandle, s_channelId, &state),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-	return static_cast<Device::DeviceState>(state);
+	return static_cast<AnalogDiscovery::DeviceState>(state);
 }
 
-Device::DeviceState Device::analogInputStatus()
+AnalogDiscovery::DeviceState AnalogDiscovery::analogInputStatus()
 {
 	DwfState state;
 	checkAndThrow(FDwfAnalogInStatus(m_devHandle, s_channelId, &state),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
-	return static_cast<Device::DeviceState>(state);
+	return static_cast<AnalogDiscovery::DeviceState>(state);
 }
 
 
 
 
-void Device::setAnalogOutputWaveform(int channel, Device::Waveform w)
+void AnalogDiscovery::setAnalogOutputWaveform(int channel, AnalogDiscovery::Waveform w)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -117,7 +130,7 @@ void Device::setAnalogOutputWaveform(int channel, Device::Waveform w)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-void Device::setAnalogOutputAmplitude(int channel, double v)
+void AnalogDiscovery::setAnalogOutputAmplitude(int channel, double v)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -126,7 +139,7 @@ void Device::setAnalogOutputAmplitude(int channel, double v)
 
 }
 
-void Device::setAnalogOutputEnabled(int channel, bool e)
+void AnalogDiscovery::setAnalogOutputEnabled(int channel, bool e)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -137,7 +150,7 @@ void Device::setAnalogOutputEnabled(int channel, bool e)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-void Device::setAnalogOutputFrequency(int channel, double f)
+void AnalogDiscovery::setAnalogOutputFrequency(int channel, double f)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -146,7 +159,7 @@ void Device::setAnalogOutputFrequency(int channel, double f)
 }
 
 
-double Device::setAnalogInputSamplingFreq(double f)
+double AnalogDiscovery::setAnalogInputSamplingFreq(double f)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -157,14 +170,14 @@ double Device::setAnalogInputSamplingFreq(double f)
 	double actual = analogInputSamplingFreq();
 	if (!(std::fabs(f - actual) < std::numeric_limits<double>::epsilon())) {
 		std::string dbg = "Sampling Frequency Differs: desired=" + std::to_string(f) +
-					 " actual=" + std::to_string(actual);
-		debug(Device::DebugLevelDebug, dbg);
+				" actual=" + std::to_string(actual);
+		debug(AnalogDiscovery::DebugLevelDebug, dbg);
 	}
 
 	return actual;
 }
 
-double Device::analogInputSamplingFreq()
+double AnalogDiscovery::analogInputSamplingFreq()
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 	double f;
@@ -175,7 +188,7 @@ double Device::analogInputSamplingFreq()
 	return f;
 }
 
-void Device::setAnalogInputRange(int channel, double v)
+void AnalogDiscovery::setAnalogInputRange(int channel, double v)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -183,7 +196,7 @@ void Device::setAnalogInputRange(int channel, double v)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-void Device::setAnalogInputEnabled(int channel, bool e)
+void AnalogDiscovery::setAnalogInputEnabled(int channel, bool e)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -192,7 +205,7 @@ void Device::setAnalogInputEnabled(int channel, bool e)
 
 }
 
-void Device::setAnalogInputAcquisitionMode(AcquisitionMode m)
+void AnalogDiscovery::setAnalogInputAcquisitionMode(AcquisitionMode m)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -201,7 +214,7 @@ void Device::setAnalogInputAcquisitionMode(AcquisitionMode m)
 
 }
 
-double Device::setAnalogInputAcquisitionDuration(double s)
+double AnalogDiscovery::setAnalogInputAcquisitionDuration(double s)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -212,13 +225,13 @@ double Device::setAnalogInputAcquisitionDuration(double s)
 	double actual = analogInputAcquisitionDuration();
 	if (!(std::fabs(s - actual) < std::numeric_limits<double>::epsilon())) {
 		std::string dbg = "Acquisition Duration Differs: desired=" + std::to_string(s) +
-		" actual=" + std::to_string(actual);
-		debug(Device::DebugLevelDebug, dbg);
+				" actual=" + std::to_string(actual);
+		debug(AnalogDiscovery::DebugLevelDebug, dbg);
 	}
 	return actual;
 }
 
-double Device::analogInputAcquisitionDuration()
+double AnalogDiscovery::analogInputAcquisitionDuration()
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -229,7 +242,7 @@ double Device::analogInputAcquisitionDuration()
 	return s;
 }
 
-void Device::setAnalogInputReconfigure(bool r)
+void AnalogDiscovery::setAnalogInputReconfigure(bool r)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -238,7 +251,7 @@ void Device::setAnalogInputReconfigure(bool r)
 
 }
 
-void Device::setAnalogInputStart(bool s)
+void AnalogDiscovery::setAnalogInputStart(bool s)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -246,7 +259,7 @@ void Device::setAnalogInputStart(bool s)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-void Device::setAnalogInputBufferSize(int s)
+void AnalogDiscovery::setAnalogInputBufferSize(int s)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -254,7 +267,7 @@ void Device::setAnalogInputBufferSize(int s)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-void Device::setAnalogInputTriggerSource(TriggerSource t)
+void AnalogDiscovery::setAnalogInputTriggerSource(TriggerSource t)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -262,7 +275,7 @@ void Device::setAnalogInputTriggerSource(TriggerSource t)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-void Device::setAnalogInputTriggerAutoTimeout(double t)
+void AnalogDiscovery::setAnalogInputTriggerAutoTimeout(double t)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -270,7 +283,7 @@ void Device::setAnalogInputTriggerAutoTimeout(double t)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-void Device::setAnalogInputTriggerChannel(int c)
+void AnalogDiscovery::setAnalogInputTriggerChannel(int c)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -278,15 +291,15 @@ void Device::setAnalogInputTriggerChannel(int c)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-void Device::setAnalogInputTriggerType(TriggerType t)
+void AnalogDiscovery::setAnalogInputTriggerType(TriggerType t)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
 	checkAndThrow(FDwfAnalogInTriggerTypeSet(m_devHandle, static_cast<int>(t)),
-			__PRETTY_FUNCTION__, __FILE__, __LINE__);
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-void Device::setAnalogInputTriggerLevel(double l)
+void AnalogDiscovery::setAnalogInputTriggerLevel(double l)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -294,7 +307,7 @@ void Device::setAnalogInputTriggerLevel(double l)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-void Device::setAnalogInputTriggerCondition(TriggerCondition t)
+void AnalogDiscovery::setAnalogInputTriggerCondition(TriggerCondition t)
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -302,7 +315,7 @@ void Device::setAnalogInputTriggerCondition(TriggerCondition t)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-void Device::triggerAnalogInput()
+void AnalogDiscovery::triggerAnalogInput()
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 
@@ -310,7 +323,7 @@ void Device::triggerAnalogInput()
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
-int Device::analogInputBufferSize()
+int AnalogDiscovery::analogInputBufferSize()
 {
 	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
 	int size;
@@ -319,13 +332,13 @@ int Device::analogInputBufferSize()
 	return size;
 }
 
-Device::SampleState Device::analogInSampleState()
+AnalogDiscovery::SampleState AnalogDiscovery::analogInSampleState()
 {
 	DwfState state = 0;
 	checkAndThrow(FDwfAnalogInStatus(m_devHandle, true, &state),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 
-	Device::SampleState ret = {-1, -1, -1};
+	AnalogDiscovery::SampleState ret = {-1, -1, -1};
 
 	checkAndThrow(FDwfAnalogInStatusRecord(m_devHandle, &ret.available, &ret.lost, &ret.corrupted),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
@@ -333,20 +346,53 @@ Device::SampleState Device::analogInSampleState()
 	return ret;
 }
 
-void Device::readAnalogInput(double *buffer, int size)
+void AnalogDiscovery::readAnalogInput(double *buffer, int size)
 {
-	checkAndThrow(FDwfAnalogInStatusData(m_devHandle, Device::s_channelId, buffer, size),
+	checkAndThrow(FDwfAnalogInStatusData(m_devHandle, AnalogDiscovery::s_channelId, buffer, size),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void AnalogDiscovery::setDigitalIoDirection(int pin, IODirection d)
+{
+	unsigned int ioMask;
+	checkAndThrow(FDwfDigitalIOOutputEnableGet(m_devHandle, &ioMask),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	unsigned int newBit = 1 << pin;
+	// in = 0 / out = 1
+	if (d == IODirectionIn)
+		ioMask &= ~newBit;
+	else
+		ioMask |= newBit;
+
+	checkAndThrow(FDwfDigitalIOOutputEnableSet(m_devHandle, ioMask),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+void AnalogDiscovery::setDigitalIo(int pin, bool value)
+{
+	unsigned int ioMask;
+	checkAndThrow(FDwfDigitalIOOutputGet(m_devHandle, &ioMask),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	unsigned int newBit = 1 << pin;
+	if (value)
+		ioMask |= newBit;
+	else
+		ioMask &= ~newBit;
+
+	checkAndThrow(FDwfDigitalIOOutputSet(m_devHandle, ioMask),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
 //Static
-std::list<Device::DeviceId> Device::getDevices()
+std::list<AnalogDiscovery::DeviceId> AnalogDiscovery::getDevices()
 {
 	int devCount;
 	FDwfEnum(enumfilterAll, &devCount);
 
-	std::list<Device::DeviceId> ret;
-	for (Device::DeviceId d = {0,0,0}; d.index<devCount; d.index++) {
+	std::list<AnalogDiscovery::DeviceId> ret;
+	for (AnalogDiscovery::DeviceId d = {0,0,0}; d.index<devCount; d.index++) {
 		FDwfEnumDeviceType(d.index, &d.id, &d.ver);
 		ret.push_back(d);
 	}
@@ -354,26 +400,26 @@ std::list<Device::DeviceId> Device::getDevices()
 }
 
 //Static
-int Device::channelId()
+int AnalogDiscovery::channelId()
 {
-	return Device::s_channelId;
+	return AnalogDiscovery::s_channelId;
 }
 
 //Static
-Device::DebugLevel Device::debugLevel()
+AnalogDiscovery::DebugLevel AnalogDiscovery::debugLevel()
 {
 	return s_debugLevel;
 }
 
 //Static
-void Device::debug(DebugLevel level, const std::string& msg)
+void AnalogDiscovery::debug(DebugLevel level, const std::string& msg)
 {
 	if (debugLevel() >= level)
-		std::cout << "[" << Device::s_debugLevelNames[level] << "]: " << msg << std::endl;
+		std::cout << "[" << AnalogDiscovery::s_debugLevelNames[level] << "]: " << msg << std::endl;
 }
 
 //Static
-void Device::readSamples(Device *handle, double *buffer, int bufferSize, std::vector<double> *target, int available)
+void AnalogDiscovery::readSamples(AnalogDiscovery *handle, double *buffer, int bufferSize, std::vector<double> *target, int available)
 {
 	while (available) {
 		int count = available > bufferSize ? bufferSize : available;
@@ -389,12 +435,12 @@ SharedTerminateFlag createTerminateFlag()
 	return SharedTerminateFlag(new std::atomic<bool>(false));
 }
 
-std::ostream& operator<<(std::ostream& lhs, const Device::DeviceState& rhs)
+std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::DeviceState& rhs)
 {
-	return lhs << Device::s_stateNames[rhs];
+	return lhs << AnalogDiscovery::s_stateNames[rhs];
 }
 
-std::ostream& operator<<(std::ostream& lhs, const Device::SampleState& rhs)
+std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::SampleState& rhs)
 {
 	return lhs << "available=" << rhs.available
 			   << " lost=" << rhs.lost

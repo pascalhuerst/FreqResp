@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <numeric>
 
-#include "Device.h"
+#include "analogdiscovery.h"
 
 using namespace std;
 
@@ -78,7 +78,7 @@ void saveBuffer(const std::vector<double>& s, const std::string& fileName)
 
 void run(SharedTerminateFlag terminateRequest)
 {
-	auto devs = Device::getDevices();
+	auto devs = AnalogDiscovery::getDevices();
 	if (devs.empty()) {
 		std::cout << "No devices Found!" << std::endl;
 		exit(0);
@@ -87,7 +87,7 @@ void run(SharedTerminateFlag terminateRequest)
 	std::cout << "Found " << devs.size() << " devices. Opening " <<
 				 devs.front().id << " [" << devs.front().ver << "]" << std::endl;
 
-	Device dev(devs.front());
+	AnalogDiscovery dev(devs.front());
 
 	// Create frequency Map with measuring frequencies
 	std::vector<double>points;
@@ -104,7 +104,7 @@ void run(SharedTerminateFlag terminateRequest)
 
 		const int channel = 0;
 		dev.setAnalogOutputAmplitude(channel, 0.2); // 200mV
-		dev.setAnalogOutputWaveform(channel, Device::WaveformSine);
+		dev.setAnalogOutputWaveform(channel, AnalogDiscovery::WaveformSine);
 
 		auto currentFrequency = points.begin();
 		auto currentFreqResp = freqResp.begin();
@@ -135,10 +135,10 @@ void run(SharedTerminateFlag terminateRequest)
 			currentFreqResp++;
 
 		}
-	} catch(DeviceException e) {
-		std::cout << "e.what(): " << e.what() << std::endl;
+	} catch(AnalogDiscoveryException e) {
+		std::cout << "e.what()1: " << e.m_file + ":" + e.m_func + ":" + std::to_string(e.m_line) + "(" + std::to_string(e.m_errno) + ")" + "\n   " + e.m_msg << std::endl;
 	} catch (std::exception e) {
-		std::cout << "e.what(): " << e.what() << std::endl;
+		std::cout << "e.what()2: " << e.what() << std::endl;
 	}
 }
 
@@ -165,15 +165,48 @@ int main(int argc, char *argv[])
 	outfile.close();
 #endif
 
+
+	auto devs = AnalogDiscovery::getDevices();
+	if (devs.empty()) {
+		std::cout << "No devices Found!" << std::endl;
+		exit(0);
+	}
+
+	std::cout << "Found " << devs.size() << " devices. Opening " <<
+				 devs.front().id << " [" << devs.front().ver << "]" << std::endl;
+
+	AnalogDiscovery dev(devs.front());
+
+	for (int i=0; i<16; i++) {
+
+		dev.setDigitalIoDirection(i, AnalogDiscovery::IODirectionOut);
+		dev.setDigitalIo(i, 0);
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		dev.setDigitalIo(i, 1);
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	}
+
+	for (int i=0; i<16; i++) {
+
+
+		dev.setDigitalIoDirection(i, AnalogDiscovery::IODirectionIn);
+
+	}
+
+
+
+
+	return 0;
+
 	auto terminate = createTerminateFlag();
 	std::thread t1(run, terminate);
 
+	std::cout << "Press q to exit..." << std::endl;
 	while(getchar() != 'q') {
 
 
 
 	}
-
 	terminate->store(true);
 	t1.join();
 

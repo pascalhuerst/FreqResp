@@ -1,7 +1,7 @@
 project(FreqResp)
 cmake_minimum_required(VERSION 2.8)
 
-set(SRC_LIST Device.cc main.cpp)
+set(SRC_LIST analogdiscovery.cpp main.cpp)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     add_definitions(-std=c++11)
