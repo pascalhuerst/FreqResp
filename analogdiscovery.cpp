@@ -369,6 +369,15 @@ void AnalogDiscovery::setDigitalIoDirection(int pin, IODirection d)
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
+AnalogDiscovery::IODirection AnalogDiscovery::getDigitalIoDirection(int pin)
+{
+	unsigned int ioMask;
+	checkAndThrow(FDwfDigitalIOOutputEnableGet(m_devHandle, &ioMask),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	return (ioMask & (1 << pin)) ? IODirectionOut : IODirectionIn;
+}
+
 void AnalogDiscovery::setDigitalIo(int pin, bool value)
 {
 	unsigned int ioMask;
@@ -383,6 +392,15 @@ void AnalogDiscovery::setDigitalIo(int pin, bool value)
 
 	checkAndThrow(FDwfDigitalIOOutputSet(m_devHandle, ioMask),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+}
+
+bool AnalogDiscovery::getDigitalIo(int pin)
+{
+	unsigned int ioMask;
+	checkAndThrow(FDwfDigitalIOOutputGet(m_devHandle, &ioMask),
+				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
+
+	return ioMask & (1 << pin);
 }
 
 //Static

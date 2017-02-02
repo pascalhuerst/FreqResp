@@ -196,13 +196,11 @@ public:
 		IODirectionOut = 0x00
 	};
 	void setDigitalIoDirection(int pin, IODirection d);
-
-
-
+	IODirection getDigitalIoDirection(int pin);
 	void setDigitalIo(int pin, bool value);
+	bool getDigitalIo(int pin);
 
-
-
+	// Debug
 	enum DebugLevel {
 		DebugLevelNone		= 0,
 		DebugLevelError		= 1,
