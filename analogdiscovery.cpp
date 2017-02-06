@@ -83,7 +83,6 @@ AnalogDiscovery::AnalogDiscovery(const DeviceId &device)
 
 	}
 
-
 	m_version = std::string(v);
 }
 
@@ -118,9 +117,6 @@ AnalogDiscovery::DeviceState AnalogDiscovery::analogInputStatus()
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 	return static_cast<AnalogDiscovery::DeviceState>(state);
 }
-
-
-
 
 void AnalogDiscovery::setAnalogOutputWaveform(int channel, AnalogDiscovery::Waveform w)
 {
@@ -437,7 +433,7 @@ void AnalogDiscovery::debug(DebugLevel level, const std::string& msg)
 }
 
 //Static
-void AnalogDiscovery::readSamples(AnalogDiscovery *handle, double *buffer, int bufferSize, std::vector<double> *target, int available)
+void AnalogDiscovery::readSamples(SharedAnalogDiscoveryHandle handle, double *buffer, int bufferSize, std::vector<double> *target, int available)
 {
 	while (available) {
 		int count = available > bufferSize ? bufferSize : available;
@@ -448,11 +444,7 @@ void AnalogDiscovery::readSamples(AnalogDiscovery *handle, double *buffer, int b
 
 }
 
-SharedTerminateFlag createTerminateFlag()
-{
-	return SharedTerminateFlag(new std::atomic<bool>(false));
-}
-
+// Non class functions
 std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::DeviceState& rhs)
 {
 	return lhs << AnalogDiscovery::s_stateNames[rhs];
@@ -463,4 +455,9 @@ std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::SampleState& 
 	return lhs << "available=" << rhs.available
 			   << " lost=" << rhs.lost
 			   << " corrupted=" << rhs.corrupted;
+}
+
+SharedAnalogDiscoveryHandle createSharedAnalogDiscoveryHandle(AnalogDiscovery::DeviceId deviceId)
+{
+	return SharedAnalogDiscoveryHandle(new AnalogDiscovery(deviceId));
 }

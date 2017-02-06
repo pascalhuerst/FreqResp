@@ -11,7 +11,7 @@ GPIO::GPIO(const std::string &name) :
 GPIO::~GPIO()
 {}
 
-std::string GPIO::name() const
+std::string GPIO::getName() const
 {
 	return m_name;
 }
@@ -132,6 +132,7 @@ SharedGPIOHandle createGPIO(const std::string &name, int gpioNumber, GPIO::Direc
 	return std::unique_ptr<GPIO>(new GPIOSysFs(name, gpioNumber, d, value));
 }
 
+// This is a bit hackish, but works good to toggle GPIOs by hand.
 void manualTest(std::list<SharedGPIOHandle> gpios)
 {
 	char g = 0;
@@ -151,7 +152,7 @@ void manualTest(std::list<SharedGPIOHandle> gpios)
 		for (auto iter = gpios.begin(); iter != gpios.end(); ++iter, v++)
 			std::cout << v << "      " << (*iter)->getValue() << "  "
 					  << ((*iter)->getDirection() == GPIO::DirectionIn ? "IN   " : "OUT  ")
-					  << (*iter)->name() << std::endl;
+					  << (*iter)->getName() << std::endl;
 
 		std::cout << std::endl << std::endl;
 

@@ -22,7 +22,7 @@ public:
 	virtual Direction getDirection() const = 0;
 	virtual bool getValue() const = 0;
 
-	std::string name() const;
+	std::string getName() const;
 
 private:
 	std::string m_name;
@@ -77,4 +77,6 @@ SharedGPIOHandle createGPIO(const std::string &name, int gpioNumber, GPIO::Direc
 
 
 void manualTest(std::list<SharedGPIOHandle> gpios);
+
+
 
