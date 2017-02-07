@@ -40,7 +40,7 @@ AnalogDiscoveryException::AnalogDiscoveryException(std::string func, std::string
 
 const char* AnalogDiscoveryException::what() const noexcept
 {
-	return (m_file + ":" + m_func + ":" + std::to_string(m_line) + "(" + std::to_string(m_errno) + ")" + "\n   " + m_msg).c_str();
+	return ("AnalogDiscoveryException caught:\n  " + m_file + ":" + std::to_string(m_line) + "\n  " + m_func  + "\n  errno=" + std::to_string(m_errno) + "\n  " + m_msg).c_str();
 }
 
 void AnalogDiscovery::throwIfNotOpened(std::string func, std::string file, int line)
@@ -66,23 +66,10 @@ AnalogDiscovery::AnalogDiscovery(const DeviceId &device)
 {
 	m_opened = (FDwfDeviceOpen(device.index, &m_devHandle) != 0);
 
+	throwIfNotOpened(__PRETTY_FUNCTION__, __FILE__, __LINE__);
+
 	char v[32];
-
-	if (m_opened) {
-		FDwfGetVersion(v);
-	} else {
-		std::cout << "Device NOT opened. Error!" << std::endl;
-
-		DWFERC pdwferc;
-		FDwfGetLastError(&pdwferc);
-
-		char szError[512];
-		FDwfGetLastErrorMsg(szError);
-
-		std::cout << "pdwferc: " << pdwferc << " msg: " << szError << std::endl;
-
-	}
-
+	FDwfGetVersion(v);
 	m_version = std::string(v);
 }
 
@@ -102,18 +89,18 @@ bool AnalogDiscovery::isOpen(void) const
 	return m_opened;
 }
 
-AnalogDiscovery::DeviceState AnalogDiscovery::analogOutputStatus()
+AnalogDiscovery::DeviceState AnalogDiscovery::analogOutputStatus(int channelId)
 {
 	DwfState state;
-	checkAndThrow(FDwfAnalogOutStatus(m_devHandle, s_channelId, &state),
+	checkAndThrow(FDwfAnalogOutStatus(m_devHandle, channelId, &state),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 	return static_cast<AnalogDiscovery::DeviceState>(state);
 }
 
-AnalogDiscovery::DeviceState AnalogDiscovery::analogInputStatus()
+AnalogDiscovery::DeviceState AnalogDiscovery::analogInputStatus(int channelId)
 {
 	DwfState state;
-	checkAndThrow(FDwfAnalogInStatus(m_devHandle, s_channelId, &state),
+	checkAndThrow(FDwfAnalogInStatus(m_devHandle, channelId, &state),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 	return static_cast<AnalogDiscovery::DeviceState>(state);
 }
@@ -342,9 +329,9 @@ AnalogDiscovery::SampleState AnalogDiscovery::analogInSampleState()
 	return ret;
 }
 
-void AnalogDiscovery::readAnalogInput(double *buffer, int size)
+void AnalogDiscovery::readAnalogInput(int channelId, double *buffer, int size)
 {
-	checkAndThrow(FDwfAnalogInStatusData(m_devHandle, AnalogDiscovery::s_channelId, buffer, size),
+	checkAndThrow(FDwfAnalogInStatusData(m_devHandle, channelId, buffer, size),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
@@ -414,12 +401,6 @@ std::list<AnalogDiscovery::DeviceId> AnalogDiscovery::getDevices()
 }
 
 //Static
-int AnalogDiscovery::channelId()
-{
-	return AnalogDiscovery::s_channelId;
-}
-
-//Static
 AnalogDiscovery::DebugLevel AnalogDiscovery::debugLevel()
 {
 	return s_debugLevel;
@@ -433,11 +414,11 @@ void AnalogDiscovery::debug(DebugLevel level, const std::string& msg)
 }
 
 //Static
-void AnalogDiscovery::readSamples(SharedAnalogDiscoveryHandle handle, double *buffer, int bufferSize, std::vector<double> *target, int available)
+void AnalogDiscovery::readSamples(SharedAnalogDiscoveryHandle handle, int channelId, double *buffer, int bufferSize, std::vector<double> *target, int available)
 {
 	while (available) {
 		int count = available > bufferSize ? bufferSize : available;
-		handle->readAnalogInput(buffer, count);
+		handle->readAnalogInput(channelId, buffer, count);
 		copy(&buffer[0], &buffer[count], back_inserter(*target));
 		available -= count;
 	}
@@ -460,4 +441,13 @@ std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::SampleState& 
 SharedAnalogDiscoveryHandle createSharedAnalogDiscoveryHandle(AnalogDiscovery::DeviceId deviceId)
 {
 	return SharedAnalogDiscoveryHandle(new AnalogDiscovery(deviceId));
+}
+
+SharedAnalogDiscoveryHandle getFirstAvailableDevice()
+{
+	auto devs = AnalogDiscovery::getDevices();
+	if (devs.empty())
+		throw AnalogDiscoveryException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0, "No Analog Discovery devices Found!");
+
+	return createSharedAnalogDiscoveryHandle(devs.front());
 }

@@ -19,12 +19,12 @@ public:
 	AnalogDiscoveryException(std::string func, std::string file, int line, int errorNumber, std::string what);
 	virtual const char* what() const noexcept;
 
+private:
 	std::string m_func;
 	std::string m_file;
 	std::string m_msg;
 	int m_line;
 	int m_errno;
-private:
 };
 
 class AnalogDiscovery;
@@ -122,7 +122,7 @@ public:
 	int analogInputBufferSize();
 	bool isOpen(void) const;
 
-	void readAnalogInput(double *buffer, int size);
+	void readAnalogInput(int channelId, double *buffer, int size);
 	SampleState analogInSampleState();
 
 	enum DeviceState {
@@ -137,13 +137,11 @@ public:
 	};
 	const static std::vector<std::string> s_stateNames;
 
-	DeviceState analogOutputStatus();
-	DeviceState analogInputStatus();
-
-	static int channelId();
+	DeviceState analogOutputStatus(int channelId);
+	DeviceState analogInputStatus(int channelId);
 
 	static std::list<DeviceId> getDevices();
-	static void readSamples(SharedAnalogDiscoveryHandle handle, double *buffer, int bufferSize, std::vector<double> *target, int available);
+	static void readSamples(SharedAnalogDiscoveryHandle handle, int channelId, double *buffer, int bufferSize, std::vector<double> *target, int available);
 
 	// Digital IO
 	enum IODirection {
@@ -182,3 +180,4 @@ private:
 std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::DeviceState& rhs);
 std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::SampleState& rhs);
 SharedAnalogDiscoveryHandle createSharedAnalogDiscoveryHandle(AnalogDiscovery::DeviceId deviceId);
+SharedAnalogDiscoveryHandle getFirstAvailableDevice();

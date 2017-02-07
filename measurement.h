@@ -11,53 +11,44 @@ typedef std::shared_ptr<std::vector<std::vector<double>>> SharedSampleStorage;
 typedef std::shared_ptr<std::atomic<bool>> SharedTerminateFlag;
 
 // Thread function, that polls and reads the inputbuffer
-auto readOneBuffer = [](SharedAnalogDiscoveryHandle handle, double currentFrequency)
+auto readOneBuffer = [](SharedAnalogDiscoveryHandle handle, int channelId, double currentFrequency)
 {
 	const double oversampling = 100.0;
 	const int desiredSampleCount = 8192;
 	const int periodes = 20;
-	// Attention: Using for input AND output, but there is a difference
-	auto ch = AnalogDiscovery::channelId();
+
 	double *buffer;
 
 	std::vector<double> samples;
 
-	try {
+	handle->setAnalogInputEnabled(channelId, true);
+	handle->setAnalogInputRange(channelId, 5);
 
-		handle->setAnalogInputEnabled(ch, true);
-		handle->setAnalogInputRange(ch, 5);
+	handle->setAnalogInputBufferSize(desiredSampleCount);
+	int bufferSize = handle->analogInputBufferSize();
+	buffer = new double[bufferSize];
 
-		handle->setAnalogInputBufferSize(desiredSampleCount);
-		int bufferSize = handle->analogInputBufferSize();
-		buffer = new double[bufferSize];
+	handle->setAnalogInputAcquisitionMode(AnalogDiscovery::AcquisitionModeRecord);
 
-		handle->setAnalogInputAcquisitionMode(AnalogDiscovery::AcquisitionModeRecord);
+	double desiredSamplingFrequency = oversampling * currentFrequency;
+	handle->setAnalogInputSamplingFreq(desiredSamplingFrequency);
+	handle->setAnalogInputAcquisitionDuration(1.0 / currentFrequency * periodes);
+	handle->setAnalogInputStart(true);
 
-		double desiredSamplingFrequency = oversampling * currentFrequency;
-		handle->setAnalogInputSamplingFreq(desiredSamplingFrequency);
-		handle->setAnalogInputAcquisitionDuration(1.0 / currentFrequency * periodes);
-		handle->setAnalogInputStart(true);
+	auto deviceState = AnalogDiscovery::DeviceStateUnknown;
 
-		auto deviceState = AnalogDiscovery::DeviceStateUnknown;
+	do {
+		auto sampleState = handle->analogInSampleState();
+		//if (sampleState.corrupted != 0 || sampleState.lost != 0)
+		//	std::cout << sampleState << std::endl;
 
-		do {
-			auto sampleState = handle->analogInSampleState();
-			if (sampleState.corrupted != 0 || sampleState.lost != 0)
-				std::cout << sampleState << std::endl;
+		if (!sampleState.available)
+			deviceState = handle->analogInputStatus(channelId);
 
-			if (!sampleState.available)
-				deviceState = handle->analogInputStatus();
+		if (sampleState.available)
+			AnalogDiscovery::readSamples(handle, channelId, buffer, bufferSize, &samples, sampleState.available);
 
-			if (sampleState.available)
-				AnalogDiscovery::readSamples(handle, buffer, bufferSize, &samples, sampleState.available);
-
-		} while (deviceState != AnalogDiscovery::DeviceStateDone);
-
-	} catch (AnalogDiscoveryException e) {
-
-		std::cout << "Cought exception in: " << __PRETTY_FUNCTION__ << std::endl;
-		std::cout << "what: " << e.what() << std::endl;
-	}
+	} while (deviceState != AnalogDiscovery::DeviceStateDone);
 
 	delete[] buffer;
 
@@ -111,10 +102,9 @@ std::ostream& operator<<(std::ostream& lhs, PrintablePair<T,T> const& rhs)
 	return lhs;
 }
 
-
 // GPIO foo
-
 std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle analogDiscovery);
+std::list<SharedGPIOHandle> loadDummyGPIOMapping(SharedAnalogDiscoveryHandle analogDiscovery);
 
 struct GPIOState {
 	GPIO::Direction direction;
@@ -131,12 +121,12 @@ void setGPIOSnapshot(GPIOSnapshot snapshot);
 class Measurement
 {
 public:
-	Measurement(const std::string &name, SharedAnalogDiscoveryHandle dev, GPIOSnapshot gpioSnapshot);
+	Measurement(const std::string &name, SharedAnalogDiscoveryHandle dev, GPIOSnapshot gpioSnapshot, double fMin, double fMax, int pointsPerDecade);
 	~Measurement();
 
-	void start();
+	void start(int channelId);
 	void stop();
-	bool isRunning() const;
+	bool isRunning();
 
 private:
 	std::string m_name;
@@ -145,6 +135,10 @@ private:
 	bool m_isRunning;
 	SharedTerminateFlag m_terminateRequest;
 	std::thread *m_thread;
+	double m_fMin;
+	double m_fMax;
+	int m_pointsPerDecade;
+
 
 	double dBuForVolts(double v);
 	double dBvForVolts(double v);
@@ -153,6 +147,6 @@ private:
 	SharedTerminateFlag createSharedTerminateFlag();
 	void saveBuffer(const std::vector<double>& s, const std::string& fileName);
 
-	static void run(SharedTerminateFlag terminateRequest, SharedAnalogDiscoveryHandle dev, Measurement *ptr);
+	static void run(SharedTerminateFlag terminateRequest, SharedAnalogDiscoveryHandle dev, int channelId, Measurement *ptr);
 
 };

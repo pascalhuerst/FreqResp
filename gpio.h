@@ -5,6 +5,19 @@
 #include <fstream>
 #include <list>
 
+class GPIOException : public std::exception {
+public:
+	GPIOException(std::string func, std::string file, int line, int errorNumber, std::string what);
+	virtual const char* what() const noexcept;
+
+private:
+	std::string m_func;
+	std::string m_file;
+	std::string m_msg;
+	int m_line;
+	int m_errno;
+};
+
 class GPIO
 {
 public:

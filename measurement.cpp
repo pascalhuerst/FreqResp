@@ -7,24 +7,6 @@
 #include <map>
 #include <utility>
 
-// Non Class
-#if 0
-	// Plot points
-	std::ostream_iterator<double> iter(std::cout, "\n");
-	std::copy(points.begin(), points.end(), iter);
-
-	// Save points in points.txt
-	std::ofstream outfile("points.txt", std::ofstream::out);
-	if (!outfile.is_open()) {
-		std::cout << "File not opened!" << std::endl;
-	}
-	Indexer<double>::setStartIndex(0);
-	std::ostream_iterator<Indexer<double>> it(outfile, "\n");
-	std::copy(points.begin(), points.end(), it);
-	outfile.flush();
-	outfile.close();
-#endif
-
 // GPIO foo
 std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle analogDiscovery)
 {
@@ -67,6 +49,13 @@ std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle a
 	gpios.push_back(createGPIO("Led 5", 504, GPIO::DirectionIn, false));
 
 	return gpios;
+}
+
+// This is usefull on PC, where we dont have those GPIOs available
+std::list<SharedGPIOHandle> loadDummyGPIOMapping(SharedAnalogDiscoveryHandle analogDiscovery)
+{
+	std::list<SharedGPIOHandle> ret;
+	return ret;
 }
 
 SharedGPIOHandle getGPIOForName(std::list<SharedGPIOHandle> gpios, const std::string &name)
@@ -121,13 +110,16 @@ void setGPIOSnapshot(GPIOSnapshot snapshot)
 }
 
 // Class
-Measurement::Measurement(const std::string &name, SharedAnalogDiscoveryHandle dev, GPIOSnapshot gpioSnapshot) :
+Measurement::Measurement(const std::string &name, SharedAnalogDiscoveryHandle dev, GPIOSnapshot gpioSnapshot, double fMin, double fMax, int pointsPerDecade) :
 	m_name(name),
 	m_dev(dev),
 	m_gpioSnapshot(gpioSnapshot),
 	m_isRunning(false),
 	m_terminateRequest(createSharedTerminateFlag()),
-	m_thread(nullptr)
+	m_thread(nullptr),
+	m_fMin(fMin),
+	m_fMax(fMax),
+	m_pointsPerDecade(pointsPerDecade)
 {
 }
 
@@ -136,7 +128,7 @@ Measurement::~Measurement()
 	stop();
 }
 
-void Measurement::start()
+void Measurement::start(int channelId)
 {
 	if (m_isRunning) {
 		std::cout << "Measurement " << m_name << " is already running. Ignoring start command" << std::endl;
@@ -146,8 +138,7 @@ void Measurement::start()
 	setGPIOSnapshot(m_gpioSnapshot);
 
 	m_terminateRequest->store(false);
-	m_thread = new std::thread(Measurement::run, m_terminateRequest, m_dev, this);
-
+	m_thread = new std::thread(Measurement::run, m_terminateRequest, m_dev, channelId, this);
 	m_isRunning = true;
 }
 
@@ -165,8 +156,11 @@ void Measurement::stop()
 	m_isRunning = false;
 }
 
-bool Measurement::isRunning() const
+bool Measurement::isRunning()
 {
+	if (m_terminateRequest->load())
+		stop();
+
 	return m_isRunning;
 }
 
@@ -193,6 +187,7 @@ double Measurement::rms(const std::vector<double>& samples)
 
 // create logarithmically well distributed measuring points,
 // so we have the same amount of measuring points in each decade.
+// TODO: Rethink that. from 2000 - 8000 is not working for example...
 std::vector<double> Measurement::createMeasuringPoints(int pointsPerDecade, double minHz, double maxHz)
 {
 	// e Values per decade
@@ -246,34 +241,31 @@ void Measurement::saveBuffer(const std::vector<double>& s, const std::string& fi
 
 
 // Static
-void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscoveryHandle dev, Measurement *ptr)
+void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscoveryHandle dev, int channelId, Measurement *ptr)
 {
 	// Create frequency Map with measuring frequencies
-	double fMin = 20;
-	double fMax = 20000;
-	int pointsPerDecade = 100;
-	auto points = ptr->createMeasuringPoints(pointsPerDecade, fMin, fMax);
+	auto points = ptr->createMeasuringPoints(ptr->m_pointsPerDecade, ptr->m_fMin, ptr->m_fMax);
 
-	//saveBuffer(points, "fMeasuringPoints.txt");
+	//ptr->saveBuffer(points, "fMeasuringPoints.txt");
 
 	std::vector<double>freqResp(points.size());
 
 	try {
+		dev->setAnalogOutputAmplitude(channelId, 5); // 200mV
 
-		const int channel = 0;
-		dev->setAnalogOutputAmplitude(channel, 0.2); // 200mV
-		dev->setAnalogOutputWaveform(channel, AnalogDiscovery::WaveformSine);
+		//dev->setAnalogOutputAmplitude(channelId, 0.2); // 200mV
+		dev->setAnalogOutputWaveform(channelId, AnalogDiscovery::WaveformSine);
 
 		auto currentFrequency = points.begin();
 		auto currentFreqResp = freqResp.begin();
 
 		while (!terminateRequest->load() && currentFrequency != points.end()) {
 
-			dev->setAnalogOutputFrequency(channel, *currentFrequency);
-			dev->setAnalogOutputEnabled(channel, true);
+			dev->setAnalogOutputFrequency(channelId, *currentFrequency);
+			dev->setAnalogOutputEnabled(channelId, true);
 			std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-			auto samples = readOneBuffer(dev, *currentFrequency);
+			auto samples = readOneBuffer(dev, channelId, *currentFrequency);
 
 			// Remove upper and lower 10% leads to better results
 			int removeCount = samples.size() * 0.1;
@@ -286,6 +278,7 @@ void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscover
 			*currentFreqResp = ptr->dBuForVolts(ptr->rms(samples));
 
 			std::cout << "[" << std::distance(points.begin(), currentFrequency)
+					  << " ch=" << channelId
 					  << "] dBu @ " << double(*currentFrequency)
 					  << "Hz: " << *currentFreqResp << std::endl;
 
@@ -294,9 +287,12 @@ void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscover
 
 		}
 	} catch(AnalogDiscoveryException e) {
-		//TODO: Fix exceptions, make these members private again!
-		std::cout << "e.what()1: " << e.m_file + ":" + e.m_func + ":" + std::to_string(e.m_line) + "(" + std::to_string(e.m_errno) + ")" + "\n   " + e.m_msg << std::endl;
+		std::cerr << e.what() << std::endl;
 	} catch (std::exception e) {
-		std::cout << "e.what()2: " << e.what() << std::endl;
+		std::cerr << e.what() << std::endl;
 	}
+
+	terminateRequest->store(true);
+
+	ptr->saveBuffer(freqResp, "measurement.txt");
 }

@@ -3,6 +3,19 @@
 
 #include <fstream>
 
+GPIOException::GPIOException(std::string func, std::string file, int line, int errorNumber, std::string what) :
+	m_func(func),
+	m_file(file),
+	m_msg(what),
+	m_line(line),
+	m_errno(errorNumber)
+{}
+
+const char* GPIOException::what() const noexcept
+{
+	return ("GPIOException caught:\n  " + m_file + ":" + std::to_string(m_line) + "\n  " + m_func  + "\n  errno=" + std::to_string(m_errno) + "\n  " + m_msg).c_str();
+}
+
 GPIO::GPIO(const std::string &name) :
 	m_name(name)
 {
@@ -17,12 +30,15 @@ std::string GPIO::getName() const
 }
 
 // Analog Discovery
-
 GPIOAnalogDiscovery::GPIOAnalogDiscovery(const std::string &name, std::shared_ptr<AnalogDiscovery> ad, unsigned int gpioNumber) :
 	basetype(name),
 	m_sharedAdHandle(ad),
 	m_gpioNumber(gpioNumber)
-{}
+{
+	if (!m_sharedAdHandle)
+		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
+							"AnalogDiscovery handle is nullptr");
+}
 
 GPIOAnalogDiscovery::GPIOAnalogDiscovery(const std::string &name, std::shared_ptr<AnalogDiscovery> ad, unsigned int gpioNumber, Direction d, bool value) :
 	GPIOAnalogDiscovery(name, ad, gpioNumber)
@@ -68,8 +84,14 @@ GPIOSysFs::GPIOSysFs(const std::string &name, int gpioNumber) :
 	m_gpioNumber(gpioNumber)
 {
 	std::ofstream fileExport;
-	fileExport.open(s_basePath + "/export");
+	std::string fileExportPath = s_basePath + "/export";
+	fileExport.open(fileExportPath);
+	if (!fileExport.is_open())
+		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
+							"Can not open file: " + fileExportPath + " to export GPIO" + std::to_string(m_gpioNumber));
+
 	fileExport << m_gpioNumber << std::endl;
+	fileExport.flush();
 }
 
 GPIOSysFs::GPIOSysFs(const std::string &name, int gpioNumber, Direction d, bool value) :
@@ -82,7 +104,8 @@ GPIOSysFs::GPIOSysFs(const std::string &name, int gpioNumber, Direction d, bool 
 GPIOSysFs::~GPIOSysFs()
 {
 	std::ofstream fileUnexport;
-	fileUnexport.open(s_basePath + "/unexport");
+	std::string fileUnexportPath = s_basePath + "/unexport";
+	fileUnexport.open(fileUnexportPath);
 	fileUnexport << m_gpioNumber << std::endl;
 	fileUnexport.flush();
 }
@@ -90,7 +113,12 @@ GPIOSysFs::~GPIOSysFs()
 void GPIOSysFs::setDirection(Direction d)
 {
 	std::ofstream fileDirection;
-	fileDirection.open(s_basePath + "/gpio" + std::to_string(m_gpioNumber) + "/direction");
+	std::string fileDirectionPath = s_basePath + "/gpio" + std::to_string(m_gpioNumber) + "/direction";
+	fileDirection.open(fileDirectionPath);
+	if (!fileDirection.is_open())
+		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
+							"Can not open file: " + fileDirectionPath + " to set direction for GPIO" + std::to_string(m_gpioNumber));
+
 	fileDirection << (d == DirectionIn ? "in" : "out") << std::endl;
 	fileDirection.flush();
 }
@@ -98,9 +126,11 @@ void GPIOSysFs::setDirection(Direction d)
 void GPIOSysFs::setValue(bool v)
 {
 	std::ofstream fileValue;
-	fileValue.open(s_basePath + "/gpio" + std::to_string(m_gpioNumber) + "/value");
-
-	if (!fileValue.is_open()) std::cout << "value FILE NOT OPEN" << std::endl;
+	std::string fileValuePath = s_basePath + "/gpio" + std::to_string(m_gpioNumber) + "/value";
+	fileValue.open(fileValuePath);
+	if (!fileValue.is_open())
+		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
+							"Can not open file: " + fileValuePath + " to set value for GPIO" + std::to_string(m_gpioNumber));
 
 	fileValue << (v ? "1" : "0") << std::endl;
 	fileValue.flush();
@@ -109,20 +139,37 @@ void GPIOSysFs::setValue(bool v)
 GPIO::Direction GPIOSysFs::getDirection() const
 {
 	std::ifstream fileDirection;
-	fileDirection.open(s_basePath + "/gpio" + std::to_string(m_gpioNumber) + "/direction");
+	std::string fileDirectionPath = s_basePath + "/gpio" + std::to_string(m_gpioNumber) + "/direction";
+	fileDirection.open(fileDirectionPath);
+	if (!fileDirection.is_open())
+		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
+							"Can not open file: " + fileDirectionPath + " to get direction for GPIO" + std::to_string(m_gpioNumber));
+
 	std::string line;
 	std::getline(fileDirection, line);
 
-	//TODO: Better errorhandling
+	if (line != "in" && line != "out")
+		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
+							"Invalid value (" + line + ") while reading direction for GPIO" + std::to_string(m_gpioNumber));
+
 	return (line == "in" ? DirectionIn : DirectionOut);
 }
 
 bool GPIOSysFs::getValue() const
 {
 	std::ifstream fileValue;
-	fileValue.open(s_basePath + "/gpio" + std::to_string(m_gpioNumber) + "/value");
+	std::string fileValuePath = s_basePath + "/gpio" + std::to_string(m_gpioNumber) + "/value";
+	fileValue.open(fileValuePath);
+	if (!fileValue.is_open())
+		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
+							"Can not open file: " + fileValuePath + " to get value for GPIO" + std::to_string(m_gpioNumber));
+
 	std::string line;
 	std::getline(fileValue, line);
+
+	if (line != "1" && line != "0")
+		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
+							"Invalid value (" + line + ") while reading dvaliue for GPIO" + std::to_string(m_gpioNumber));
 
 	return (line == "1" ? true : false);
 }
@@ -132,7 +179,7 @@ SharedGPIOHandle createGPIO(const std::string &name, int gpioNumber, GPIO::Direc
 	return std::unique_ptr<GPIO>(new GPIOSysFs(name, gpioNumber, d, value));
 }
 
-// This is a bit hackish, but works good to toggle GPIOs by hand.
+// This is a bit hackish, but works good to test-toggle GPIOs by hand.
 void manualTest(std::list<SharedGPIOHandle> gpios)
 {
 	char g = 0;
