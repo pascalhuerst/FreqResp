@@ -89,7 +89,7 @@ private:
 SharedGPIOHandle createGPIO(const std::string &name, int gpioNumber, GPIO::Direction d, bool value);
 
 
-void manualTest(std::list<SharedGPIOHandle> gpios);
+
 
 
 

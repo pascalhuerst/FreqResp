@@ -1,14 +1,17 @@
 #include <iostream>
 #include <thread>
 
-#include <unistd.h>
-#include <termios.h>
+
 
 #include "measurement.h"
 #include "analogdiscovery.h"
 #include "gpio.h"
+#include "default.h"
+#include "specialkeyboard.h"
+#include "tests.h"
 
 #include <boost/program_options.hpp>
+
 
 using namespace std;
 using namespace boost::program_options;
@@ -18,46 +21,11 @@ void printUsage(const options_description &desc)
 	cout << desc << std::endl;
 }
 
-char getch() {
-		char buf = 0;
-		struct termios old = {0};
-		if (tcgetattr(0, &old) < 0)
-				perror("tcsetattr()");
-		old.c_lflag &= ~ICANON;
-		old.c_lflag &= ~ECHO;
-		old.c_cc[VMIN] = 1;
-		old.c_cc[VTIME] = 0;
-		if (tcsetattr(0, TCSANOW, &old) < 0)
-				perror("tcsetattr ICANON");
-		if (read(0, &buf, 1) < 0)
-				perror ("read()");
-		old.c_lflag |= ICANON;
-		old.c_lflag |= ECHO;
-		if (tcsetattr(0, TCSADRAIN, &old) < 0)
-				perror ("tcsetattr ~ICANON");
-		return (buf);
-}
 
 
 
 int main(int argc, char *argv[])
 {
-	// Command Line Parameters
-	const char paramHelp[] = "help,h";
-	const char paramSelfTest[] = "self-test,t";
-	const char paramManualGpio[] = "manual-gpio,m";
-
-	const char paramChannelId[] = "channel,c";
-	const char paramfMin[] = "fmin,f";
-	const char paramfMax[] = "fmax,g";
-	const char paramPointsPerDecade[] = "points-per-decade,p";
-
-
-	int channelId = -1;
-	double fMin = 20;			// Default is 20Hz
-	double fMax = 20000;		// Default is 20kHz
-	int pointsPerDecade = 20;// 20 measurements per decade
-
 	try {
 
 		options_description desc("Usage");
@@ -79,11 +47,22 @@ int main(int argc, char *argv[])
 		// Information
 		if (varMap.count("help")) { printUsage(desc); exit(EXIT_SUCCESS); }
 
+		// Testing
 		if (varMap.count("self-test")) {
 			std::cout << "Running selftest" << std::endl;
 			exit(EXIT_SUCCESS);
 		}
 
+		if (varMap.count("manual-gpio")) {
+			{ // Make sure RAII ressources are freed before exit()
+				auto sharedDev = getFirstAvailableDevice();
+				auto gpios = loadDefaultGPIOMapping(sharedDev);
+				manualGPIOTest(gpios);
+			}
+			exit(EXIT_SUCCESS);
+		}
+
+		// Measuring
 		if (varMap.count("channel")) {
 			channelId = varMap["channel"].as<int>();
 			if (channelId != 0 && channelId != 1) {
@@ -110,22 +89,6 @@ int main(int argc, char *argv[])
 		}
 
 
-
-		if (varMap.count("manual-gpio")) {
-			{ // Make sure RAII ressources are freed before exit()
-				auto sharedDev = getFirstAvailableDevice();
-				auto gpios = loadDefaultGPIOMapping(sharedDev);
-				manualTest(gpios);
-			}
-			exit(EXIT_SUCCESS);
-		}
-
-
-
-
-
-
-
 		auto sharedDev = getFirstAvailableDevice();
 
 #if 1
@@ -150,18 +113,15 @@ int main(int argc, char *argv[])
 		}
 
 
-		//printf("%f %f\n", fMin, fMax);
-		Measurement m("MyMeasurement", sharedDev, gpioSnapshotWoofer, fMin, fMax, pointsPerDecade);
 
-		std::cout << "starting..." << std::endl;
+		Measurement m("MyMeasurement", sharedDev, gpioSnapshotWoofer, fMin, fMax, pointsPerDecade);
 		m.start(channelId);
 
-
-		std::cout << "running..." << std::endl;
-		while(getch() != 'q' && m.isRunning()) {
-			std::cout << "...";
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-		}
+		{ SpecialKeyboard kb; // nonblocking keyboard input
+			while(kb.kbhit() != 'q' && m.isRunning()) {
+				std::cout << ".";
+				std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+			}}
 
 		if (m.isRunning()) m.stop();
 
