@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include <map>
+#include <sstream>
 
 #include "analogdiscovery.h"
 #include "gpio.h"
@@ -39,8 +40,11 @@ auto readOneBuffer = [](SharedAnalogDiscoveryHandle handle, int channelId, doubl
 
 	do {
 		auto sampleState = handle->analogInSampleState();
-		//if (sampleState.corrupted != 0 || sampleState.lost != 0)
-		//	std::cout << sampleState << std::endl;
+		if (sampleState.corrupted != 0 || sampleState.lost != 0) {
+			std::stringstream ss;
+			ss << sampleState;
+			Debug::debug("Measurement", ss.str());
+		}
 
 		if (!sampleState.available)
 			deviceState = handle->analogInputStatus(channelId);

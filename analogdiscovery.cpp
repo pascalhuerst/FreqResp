@@ -8,9 +8,6 @@
 
 using namespace std;
 
-const int AnalogDiscovery::s_channelId = 0;
-AnalogDiscovery::DebugLevel AnalogDiscovery::s_debugLevel = AnalogDiscovery::DebugLevelWarning;
-
 const std::vector<std::string> AnalogDiscovery::s_stateNames = {
 	"Ready",
 	"Armed",
@@ -20,14 +17,6 @@ const std::vector<std::string> AnalogDiscovery::s_stateNames = {
 	"Prefill",
 	"Unknown",
 	"Wait"
-};
-
-const std::vector<std::string> AnalogDiscovery::s_debugLevelNames = {
-	"None   ",
-	"Error  ",
-	"Warning",
-	"Debug  ",
-	"Verbose"
 };
 
 AnalogDiscoveryException::AnalogDiscoveryException(std::string func, std::string file, int line, int errorNumber, std::string what) :
@@ -154,7 +143,7 @@ double AnalogDiscovery::setAnalogInputSamplingFreq(double f)
 	if (!(std::fabs(f - actual) < std::numeric_limits<double>::epsilon())) {
 		std::string dbg = "Sampling Frequency Differs: desired=" + std::to_string(f) +
 				" actual=" + std::to_string(actual);
-		debug(AnalogDiscovery::DebugLevelDebug, dbg);
+		Debug::debug("AnalogDiscovery", dbg);
 	}
 
 	return actual;
@@ -209,7 +198,7 @@ double AnalogDiscovery::setAnalogInputAcquisitionDuration(double s)
 	if (!(std::fabs(s - actual) < std::numeric_limits<double>::epsilon())) {
 		std::string dbg = "Acquisition Duration Differs: desired=" + std::to_string(s) +
 				" actual=" + std::to_string(actual);
-		debug(AnalogDiscovery::DebugLevelDebug, dbg);
+		Debug::debug("AnalogDiscovery", dbg);
 	}
 	return actual;
 }
@@ -401,19 +390,6 @@ std::list<AnalogDiscovery::DeviceId> AnalogDiscovery::getDevices()
 }
 
 //Static
-AnalogDiscovery::DebugLevel AnalogDiscovery::debugLevel()
-{
-	return s_debugLevel;
-}
-
-//Static
-void AnalogDiscovery::debug(DebugLevel level, const std::string& msg)
-{
-	if (debugLevel() >= level)
-		std::cout << "[" << AnalogDiscovery::s_debugLevelNames[level] << "]: " << msg << std::endl;
-}
-
-//Static
 void AnalogDiscovery::readSamples(SharedAnalogDiscoveryHandle handle, int channelId, double *buffer, int bufferSize, std::vector<double> *target, int available)
 {
 	while (available) {
@@ -423,6 +399,22 @@ void AnalogDiscovery::readSamples(SharedAnalogDiscoveryHandle handle, int channe
 		available -= count;
 	}
 
+}
+
+//Static
+SharedAnalogDiscoveryHandle AnalogDiscovery::createSharedAnalogDiscoveryHandle(AnalogDiscovery::DeviceId deviceId)
+{
+	return SharedAnalogDiscoveryHandle(new AnalogDiscovery(deviceId));
+}
+
+//Static
+SharedAnalogDiscoveryHandle AnalogDiscovery::getFirstAvailableDevice()
+{
+	auto devs = AnalogDiscovery::getDevices();
+	if (devs.empty())
+		throw AnalogDiscoveryException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0, "No Analog Discovery devices Found!");
+
+	return createSharedAnalogDiscoveryHandle(devs.front());
 }
 
 // Non class functions
@@ -436,18 +428,4 @@ std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::SampleState& 
 	return lhs << "available=" << rhs.available
 			   << " lost=" << rhs.lost
 			   << " corrupted=" << rhs.corrupted;
-}
-
-SharedAnalogDiscoveryHandle createSharedAnalogDiscoveryHandle(AnalogDiscovery::DeviceId deviceId)
-{
-	return SharedAnalogDiscoveryHandle(new AnalogDiscovery(deviceId));
-}
-
-SharedAnalogDiscoveryHandle getFirstAvailableDevice()
-{
-	auto devs = AnalogDiscovery::getDevices();
-	if (devs.empty())
-		throw AnalogDiscoveryException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0, "No Analog Discovery devices Found!");
-
-	return createSharedAnalogDiscoveryHandle(devs.front());
 }

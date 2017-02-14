@@ -14,6 +14,8 @@
 #include <cmath>
 #include <digilent/waveforms/dwf.h>
 
+#include "debug.h"
+
 class AnalogDiscoveryException : public std::exception {
 public:
 	AnalogDiscoveryException(std::string func, std::string file, int line, int errorNumber, std::string what);
@@ -141,6 +143,8 @@ public:
 	DeviceState analogInputStatus(int channelId);
 
 	static std::list<DeviceId> getDevices();
+	static SharedAnalogDiscoveryHandle createSharedAnalogDiscoveryHandle(AnalogDiscovery::DeviceId deviceId);
+	static SharedAnalogDiscoveryHandle getFirstAvailableDevice();
 	static void readSamples(SharedAnalogDiscoveryHandle handle, int channelId, double *buffer, int bufferSize, std::vector<double> *target, int available);
 
 	// Digital IO
@@ -153,25 +157,10 @@ public:
 	void setDigitalIo(int pin, bool value);
 	bool getDigitalIo(int pin);
 
-	// Debug
-	enum DebugLevel {
-		DebugLevelNone		= 0,
-		DebugLevelError		= 1,
-		DebugLevelWarning	= 2,
-		DebugLevelDebug		= 3,
-		DebugLevelVerbose	= 4
-	};
-	const static std::vector<std::string> s_debugLevelNames;
-	static void debug(AnalogDiscovery::DebugLevel level, const std::string& msg);
-	static AnalogDiscovery::DebugLevel debugLevel();
-
 private:
 	HDWF m_devHandle;
 	bool m_opened;
 	std::string m_version;
-
-	const static int s_channelId;
-	static DebugLevel s_debugLevel;
 
 	void throwIfNotOpened(std::string func, std::string file, int line);
 	void checkAndThrow(bool ret, std::string func, std::string file, int line);
@@ -179,5 +168,3 @@ private:
 
 std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::DeviceState& rhs);
 std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::SampleState& rhs);
-SharedAnalogDiscoveryHandle createSharedAnalogDiscoveryHandle(AnalogDiscovery::DeviceId deviceId);
-SharedAnalogDiscoveryHandle getFirstAvailableDevice();

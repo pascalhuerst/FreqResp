@@ -7,6 +7,8 @@
 #include <map>
 #include <utility>
 
+#include "debug.h"
+
 // GPIO foo
 std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle analogDiscovery)
 {
@@ -27,7 +29,7 @@ std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle a
 	// So we have one nEn and two ADR lines here
 	gpios.push_back(createGPIO("ADR0", analogDiscovery, 13, GPIO::DirectionOut, false));
 	gpios.push_back(createGPIO("ADR1", analogDiscovery, 14, GPIO::DirectionOut, false));
-	gpios.push_back(createGPIO("nEnable", analogDiscovery, 15, GPIO::DirectionOut, true));
+	gpios.push_back(createGPIO("Enable", analogDiscovery, 15, GPIO::DirectionOut, false));
 
 	// MinnowBoard GPIOs
 	// Outputs
@@ -64,7 +66,7 @@ SharedGPIOHandle getGPIOForName(std::list<SharedGPIOHandle> gpios, const std::st
 		if ((*it)->getName() == name)
 			return *it;
 	}
-	std::cout << "GPIO with name \"" << name <<  "\" does not exist!" << std::endl;
+	Debug::warning("Measurement", "GPIO with name \"" + name +  "\" does not exist!");
 
 	return nullptr;
 }
@@ -85,25 +87,25 @@ GPIOSnapshot createGPIOSnapshot(std::list<SharedGPIOHandle> gpios)
 void updateGPIOSnapshot(GPIOSnapshot *snapshot, SharedGPIOHandle gpio, GPIOState state)
 {
 	if (!gpio) {
-		std::cout << "Ignoring snapshot update. GPIO is nullptr" << std::endl;
+		Debug::warning("Measurement", "Ignoring snapshot update. GPIO(" + gpio->getName() + ") is nullptr");
 		return;
 	}
 
 	auto it = snapshot->find(gpio);
 	if (it == snapshot->end()) {
 		if (snapshot->insert(std::make_pair(gpio, state)).second == false)
-			std::cout << "Error inserting: " << gpio->getName() << std::endl;
+			Debug::warning("Measurement", "Can not insert: " + gpio->getName());
 	} else {
-		//std::cout << "Updating " << gpio->getName() << " to " << state.value << std::endl;
+		Debug::debug("Measurement", "Updating " + gpio->getName() + " to " + std::to_string(state.value));
 		it->second = state;
 	}
 }
 
 void setGPIOSnapshot(GPIOSnapshot snapshot)
 {
-	//std::cout << "setSnapshot: have " << snapshot.size() << " values:" << std::endl;
+	Debug::verbose("Measurement", "setSnapshot: have " + std::to_string(snapshot.size()) + " values:");
 	for (auto it=snapshot.begin(); it!=snapshot.end(); it++) {
-		//std::cout << "  updating: " << it->first->getName() << " to: " << it->second.value << std::endl;
+		Debug::verbose("Measurement", "Setting: " + it->first->getName() + " to: " + std::to_string(it->second.value));
 		it->first->setDirection(it->second.direction);
 		it->first->setValue(it->second.value);
 	}
@@ -131,7 +133,7 @@ Measurement::~Measurement()
 void Measurement::start(int channelId)
 {
 	if (m_isRunning) {
-		std::cout << "Measurement " << m_name << " is already running. Ignoring start command" << std::endl;
+		Debug::warning("Measurement", "Already started. Ignoring start command!");
 		return;
 	}
 
@@ -145,7 +147,7 @@ void Measurement::start(int channelId)
 void Measurement::stop()
 {
 	if (!m_isRunning) {
-		std::cout << "Measurement " << m_name << " is not running. Ignoring stop command" << std::endl;
+		Debug::warning("Measurement", "Already stopped. Ignoring stop command!");
 		return;
 	}
 
@@ -232,7 +234,7 @@ void Measurement::saveBuffer(const std::vector<double>& s, const std::string& fi
 	std::ofstream outfile(fileName, std::ofstream::out);
 
 	if (!outfile.is_open()) {
-		std::cout << "File not opened!" << std::endl;
+		Debug::error("Measurement", "Can not save buffer! File not opened: " + fileName);
 	}
 
 	IntIndexer<double>::setStartIndex(0);
@@ -282,10 +284,9 @@ void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscover
 
 			*currentFreqResp = ptr->dBuForVolts(ptr->rms(samples));
 
-			std::cout << "[" << std::distance(points.begin(), currentFrequency)
-					  << " ch=" << channelId
-					  << "] dBu @ " << double(*currentFrequency)
-					  << "Hz: " << *currentFreqResp << std::endl;
+			Debug::debug("Measurement", "[" + std::to_string(std::distance(points.begin(), currentFrequency))
+						 + " ch=" + std::to_string(channelId) + "] dBu @ "
+						 + std::to_string(double(*currentFrequency)) + "Hz: " + std::to_string(*currentFreqResp));
 
 			currentFrequency++;
 			currentFreqResp++;

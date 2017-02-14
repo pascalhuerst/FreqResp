@@ -1,14 +1,13 @@
 #include <iostream>
 #include <thread>
 
-
-
 #include "measurement.h"
 #include "analogdiscovery.h"
 #include "gpio.h"
 #include "default.h"
 #include "specialkeyboard.h"
 #include "tests.h"
+#include "debug.h"
 
 #include <boost/program_options.hpp>
 
@@ -20,8 +19,6 @@ void printUsage(const options_description &desc)
 {
 	cout << desc << std::endl;
 }
-
-
 
 
 int main(int argc, char *argv[])
@@ -55,7 +52,7 @@ int main(int argc, char *argv[])
 
 		if (varMap.count("manual-gpio")) {
 			{ // Make sure RAII ressources are freed before exit()
-				auto sharedDev = getFirstAvailableDevice();
+				auto sharedDev = AnalogDiscovery::getFirstAvailableDevice();
 				auto gpios = loadDefaultGPIOMapping(sharedDev);
 				manualGPIOTest(gpios);
 			}
@@ -68,12 +65,12 @@ int main(int argc, char *argv[])
 			if (channelId != 0 && channelId != 1) {
 				printUsage(desc);
 				std::cout << "invalid value for channel" << std::endl;
-				exit (EXIT_SUCCESS);
+				exit (EXIT_FAILURE);
 			}
 		} else {
 			printUsage(desc);
 			std::cout << "channel must be set!" << std::endl;
-			exit (EXIT_SUCCESS);
+			exit (EXIT_FAILURE);
 		}
 
 		if (varMap.count("fmin")) {
@@ -89,9 +86,9 @@ int main(int argc, char *argv[])
 		}
 
 
-		auto sharedDev = getFirstAvailableDevice();
+		auto sharedDev = AnalogDiscovery::getFirstAvailableDevice();
 
-#if 1
+#if 0
 		auto gpios = loadDefaultGPIOMapping(sharedDev);
 #else
 		auto gpios = loadDummyGPIOMapping(sharedDev);

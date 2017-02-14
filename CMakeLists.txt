@@ -1,7 +1,7 @@
 project(FreqResp)
 cmake_minimum_required(VERSION 2.8)
 
-set(SRC_LIST analogdiscovery.cpp gpio.cpp measurement.cpp main.cpp default.h specialkeyboard.cpp tests.cpp)
+set(SRC_LIST analogdiscovery.cpp gpio.cpp measurement.cpp main.cpp default.h specialkeyboard.cpp tests.cpp debug.cpp)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     add_definitions(-std=c++11)
