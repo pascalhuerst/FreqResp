@@ -187,9 +187,12 @@ double Measurement::rms(const std::vector<double>& samples)
 
 // create logarithmically well distributed measuring points,
 // so we have the same amount of measuring points in each decade.
-// TODO: Rethink that. from 2000 - 8000 is not working for example...
 std::vector<double> Measurement::createMeasuringPoints(int pointsPerDecade, double minHz, double maxHz)
 {
+	// If requested points are within one decade, extend range first
+	// aditional values will be removed later on
+	double maxHzFixed = (maxHz / minHz < 10.f ? maxHz * 10.f : maxHz);
+
 	// e Values per decade
 	double e = static_cast<double>(pointsPerDecade);
 	double k = std::pow(10, 1.0 / e);
@@ -200,7 +203,7 @@ std::vector<double> Measurement::createMeasuringPoints(int pointsPerDecade, doub
 		double currentVal = (pow(k, exp) * 10.0) / 10.0;
 		points.push_back(currentVal);
 
-		double tmpMax = maxHz*10.0;
+		double tmpMax = maxHzFixed*10.0;
 		double fac = 10.0;
 		while (tmpMax > minHz) {
 			points.push_back(currentVal*fac);
@@ -246,7 +249,9 @@ void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscover
 	// Create frequency Map with measuring frequencies
 	auto points = ptr->createMeasuringPoints(ptr->m_pointsPerDecade, ptr->m_fMin, ptr->m_fMax);
 
-	//ptr->saveBuffer(points, "fMeasuringPoints.txt");
+	ptr->saveBuffer(points, "fMeasuringPoints.txt");
+
+	exit(0);
 
 	std::vector<double>freqResp(points.size());
 
