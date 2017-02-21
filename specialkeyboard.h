@@ -9,6 +9,5 @@ public:
 private:
 	void nonblock(bool enable);
 
-
 };
 

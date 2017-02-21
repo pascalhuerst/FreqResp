@@ -16,6 +16,7 @@
 
 #include "debug.h"
 
+
 class AnalogDiscoveryException : public std::exception {
 public:
 	AnalogDiscoveryException(std::string func, std::string file, int line, int errorNumber, std::string what);

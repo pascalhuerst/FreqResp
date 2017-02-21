@@ -1,15 +1,14 @@
 #pragma once
 
-#include <memory>
 #include <vector>
 #include <map>
 #include <sstream>
 
 #include "analogdiscovery.h"
 #include "gpio.h"
+#include "types.h"
 
-typedef std::shared_ptr<std::vector<std::vector<double>>> SharedSampleStorage;
-typedef std::shared_ptr<std::atomic<bool>> SharedTerminateFlag;
+
 
 // Thread function, that polls and reads the inputbuffer
 auto readOneBuffer = [](SharedAnalogDiscoveryHandle handle, int channelId, double currentFrequency)
@@ -43,7 +42,7 @@ auto readOneBuffer = [](SharedAnalogDiscoveryHandle handle, int channelId, doubl
 		if (sampleState.corrupted != 0 || sampleState.lost != 0) {
 			std::stringstream ss;
 			ss << sampleState;
-			Debug::debug("Measurement", ss.str());
+			Debug::verbose("Measurement", ss.str());
 		}
 
 		if (!sampleState.available)
@@ -120,6 +119,12 @@ SharedGPIOHandle getGPIOForName(std::list<SharedGPIOHandle> gpios, const std::st
 void updateGPIOSnapshot(GPIOSnapshot *snapshot, SharedGPIOHandle gpio, GPIOState state);
 void setGPIOSnapshot(GPIOSnapshot snapshot);
 
+double dBuForVolts(double v);
+double dBvForVolts(double v);
+double rms(const std::vector<double>& samples);
+double rms(double vsine);
+void saveBuffer(const std::vector<double>& s, const std::string& fileName);
+
 // Class
 
 class Measurement
@@ -132,6 +137,8 @@ public:
 	void stop();
 	bool isRunning();
 
+	//Hmm... rethink
+	static void calibrate(SharedTerminateFlag terminateRequest, SharedCalibrateAmout amount, SharedCommandFlag cmd, SharedAnalogDiscoveryHandle dev, std::list<SharedGPIOHandle> gpios, int channelId);
 private:
 	std::string m_name;
 	SharedAnalogDiscoveryHandle m_dev;
@@ -144,13 +151,7 @@ private:
 	int m_pointsPerDecade;
 
 
-	double dBuForVolts(double v);
-	double dBvForVolts(double v);
-	double rms(const std::vector<double>& samples);
 	std::vector<double> createMeasuringPoints(int pointsPerDecade, double minHz, double maxHz);
-	SharedTerminateFlag createSharedTerminateFlag();
-	void saveBuffer(const std::vector<double>& s, const std::string& fileName);
-
 	static void run(SharedTerminateFlag terminateRequest, SharedAnalogDiscoveryHandle dev, int channelId, Measurement *ptr);
 
 };

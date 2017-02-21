@@ -1,6 +1,7 @@
 #include "debug.h"
 
 #include <iostream>
+#include <iomanip>
 
 const std::vector<std::string> Debug::s_debugLevelNames = {
 	"None   ",
@@ -10,7 +11,16 @@ const std::vector<std::string> Debug::s_debugLevelNames = {
 	"Verbose"
 };
 
-Debug::Level Debug::s_debugLevel = Debug::LevelNone;
+Debug::Level Debug::s_debugLevel = Debug::LevelWarning;
+
+// Static
+std::string Debug::name(Debug::Level l)
+{
+	if (static_cast<int>(l) >= Debug::LevelLast)
+		return "invalid";
+
+	return s_debugLevelNames.at(static_cast<int>(l));
+}
 
 // Static
 Debug::Level Debug::getDebugLevel()
@@ -51,6 +61,6 @@ void Debug::verbose(const std::string& name, const std::string& msg)
 // Static
 void Debug::write(Level level, const std::string& name, const std::string &msg)
 {
-	if (level >= s_debugLevel)
-		std::cout << s_debugLevelNames[level] << " " << name << " :" << msg << std::endl;
+	if (level <= s_debugLevel)
+		std::cerr << "[" << "\e[1m" << name << std::setw(30 - name.length()) <<  "\e[0m] " << msg << std::endl;
 }

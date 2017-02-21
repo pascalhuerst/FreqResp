@@ -2,8 +2,11 @@
 
 // Command Line Parameters
 const char paramHelp[] = "help,h";
+const char paramDebugLevel[] = "debug,d";
+
 const char paramSelfTest[] = "self-test,t";
 const char paramManualGpio[] = "manual-gpio,m";
+const char paramCalibrate[] = "calibrate,o";
 
 const char paramChannelId[] = "channel,c";
 const char paramfMin[] = "fmin,f";

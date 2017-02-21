@@ -2,6 +2,7 @@
 #include "analogdiscovery.h"
 
 #include <fstream>
+#include <thread>
 
 GPIOException::GPIOException(std::string func, std::string file, int line, int errorNumber, std::string what) :
 	m_func(func),

@@ -21,6 +21,7 @@ std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle a
 	gpios.push_back(createGPIO("Front_LED_3", analogDiscovery, 2, GPIO::DirectionOut, false));
 	gpios.push_back(createGPIO("Front_LED_4", analogDiscovery, 3, GPIO::DirectionOut, false));
 	gpios.push_back(createGPIO("Front_LED_5", analogDiscovery, 4, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Relais_Power", analogDiscovery, 9, GPIO::DirectionOut, true)); // This is the main Power for the speaker
 	gpios.push_back(createGPIO("Relais_K109", analogDiscovery, 10, GPIO::DirectionOut, false)); // This is to check, if load resistors are damaged
 	gpios.push_back(createGPIO("Relais_K108", analogDiscovery, 11, GPIO::DirectionOut, false)); // 4 or 6 Ohm Load for J103-J105
 	gpios.push_back(createGPIO("Relais_K104", analogDiscovery, 12, GPIO::DirectionOut, false));	// 4 or 6 Ohm Load for J100-J102
@@ -41,7 +42,7 @@ std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle a
 	gpios.push_back(createGPIO("Station3 Button", 485, GPIO::DirectionOut, false));
 	gpios.push_back(createGPIO("Station4 Button", 475, GPIO::DirectionOut, false));
 	gpios.push_back(createGPIO("Power Button", 484, GPIO::DirectionOut, false));
-	gpios.push_back(createGPIO("Reset Button", 474, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Reset Button", 474, GPIO::DirectionOut, true)); //Investigate: This must be true, othewise speaker tries to flash. Inverted?
 	gpios.push_back(createGPIO("Setup Button", 338, GPIO::DirectionOut, false));
 	// Inputs
 	gpios.push_back(createGPIO("Led 1", 509, GPIO::DirectionIn, false));
@@ -66,7 +67,7 @@ SharedGPIOHandle getGPIOForName(std::list<SharedGPIOHandle> gpios, const std::st
 		if ((*it)->getName() == name)
 			return *it;
 	}
-	Debug::warning("Measurement", "GPIO with name \"" + name +  "\" does not exist!");
+	Debug::warning("getGPIOForName", "GPIO with name \"" + name +  "\" does not exist!");
 
 	return nullptr;
 }
@@ -87,28 +88,69 @@ GPIOSnapshot createGPIOSnapshot(std::list<SharedGPIOHandle> gpios)
 void updateGPIOSnapshot(GPIOSnapshot *snapshot, SharedGPIOHandle gpio, GPIOState state)
 {
 	if (!gpio) {
-		Debug::warning("Measurement", "Ignoring snapshot update. GPIO(" + gpio->getName() + ") is nullptr");
+		Debug::warning("updateGPIOSnapshot", "Ignoring snapshot update. GPIO(" + gpio->getName() + ") is nullptr");
 		return;
 	}
 
 	auto it = snapshot->find(gpio);
 	if (it == snapshot->end()) {
 		if (snapshot->insert(std::make_pair(gpio, state)).second == false)
-			Debug::warning("Measurement", "Can not insert: " + gpio->getName());
+			Debug::warning("updateGPIOSnapshot", "Can not insert: " + gpio->getName());
 	} else {
-		Debug::debug("Measurement", "Updating " + gpio->getName() + " to " + std::to_string(state.value));
+		Debug::verbose("updateGPIOSnapshot", "Updating " + gpio->getName() + " to " + std::to_string(state.value));
 		it->second = state;
 	}
 }
 
 void setGPIOSnapshot(GPIOSnapshot snapshot)
 {
-	Debug::verbose("Measurement", "setSnapshot: have " + std::to_string(snapshot.size()) + " values:");
+	Debug::verbose("Measurement", "setGPIOSnapshot: Setting " + std::to_string(snapshot.size()) + " values!");
 	for (auto it=snapshot.begin(); it!=snapshot.end(); it++) {
-		Debug::verbose("Measurement", "Setting: " + it->first->getName() + " to: " + std::to_string(it->second.value));
+		Debug::verbose("setGPIOSnapshot", "Setting: " + it->first->getName() + " to: " + std::to_string(it->second.value));
 		it->first->setDirection(it->second.direction);
 		it->first->setValue(it->second.value);
 	}
+}
+
+double dBuForVolts(double v) {
+	static const double Uref = 0.7746;
+	return 20 * log(v / Uref);
+}
+
+double dBvForVolts(double v) {
+	static const double Uref = 1.0;
+	return 20 * log (v / Uref);
+}
+
+double rms(const std::vector<double>& samples)
+{
+	double rms = 0.0;
+	for (auto sample : samples) {
+		rms += sample * sample;
+	}
+	rms = sqrt(rms / samples.size());
+	return rms;
+}
+
+double rms(double vsine)
+{
+	return vsine / sqrt(2);
+}
+
+void saveBuffer(const std::vector<double>& s, const std::string& fileName)
+{
+	std::ofstream outfile(fileName, std::ofstream::out);
+
+	if (!outfile.is_open()) {
+		Debug::error("saveBuffer", "Can not save buffer! File not opened: " + fileName);
+		return;
+	}
+
+	IntIndexer<double>::setStartIndex(0);
+	std::ostream_iterator<IntIndexer<double>> iter(outfile, "\n");
+	std::copy(s.begin(), s.end(), iter);
+	outfile.flush();
+	outfile.close();
 }
 
 // Class
@@ -132,6 +174,8 @@ Measurement::~Measurement()
 
 void Measurement::start(int channelId)
 {
+	Debug::verbose("Measurement::start", "Starting measurement");
+
 	if (m_isRunning) {
 		Debug::warning("Measurement", "Already started. Ignoring start command!");
 		return;
@@ -146,6 +190,8 @@ void Measurement::start(int channelId)
 
 void Measurement::stop()
 {
+	Debug::verbose("Measurement::stop", "Stopping measurement");
+
 	if (!m_isRunning) {
 		Debug::warning("Measurement", "Already stopped. Ignoring stop command!");
 		return;
@@ -164,27 +210,6 @@ bool Measurement::isRunning()
 		stop();
 
 	return m_isRunning;
-}
-
-double Measurement::dBuForVolts(double v) {
-	static const double Uref = 0.7746;
-	return 20 * log(v / Uref);
-}
-
-double Measurement::dBvForVolts(double v) {
-	static const double Uref = 1.0;
-	return 20 * log (v / Uref);
-}
-
-double Measurement::rms(const std::vector<double>& samples)
-{
-	double rms = 0.0;
-	for (auto sample : samples) {
-		rms += sample * sample;
-		rms = sqrt(rms / samples.size());
-	}
-	rms = sqrt(rms / samples.size());
-	return rms;
 }
 
 // create logarithmically well distributed measuring points,
@@ -224,52 +249,42 @@ std::vector<double> Measurement::createMeasuringPoints(int pointsPerDecade, doub
 	return points;
 }
 
-SharedTerminateFlag Measurement::createSharedTerminateFlag()
-{
-	return SharedTerminateFlag(new std::atomic<bool>(false));
-}
-
-void Measurement::saveBuffer(const std::vector<double>& s, const std::string& fileName)
-{
-	std::ofstream outfile(fileName, std::ofstream::out);
-
-	if (!outfile.is_open()) {
-		Debug::error("Measurement", "Can not save buffer! File not opened: " + fileName);
-	}
-
-	IntIndexer<double>::setStartIndex(0);
-	std::ostream_iterator<IntIndexer<double>> iter(outfile, "\n");
-	std::copy(s.begin(), s.end(), iter);
-	outfile.flush();
-	outfile.close();
-}
-
-
 // Static
 void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscoveryHandle dev, int channelId, Measurement *ptr)
 {
 	// Create frequency Map with measuring frequencies
 	auto points = ptr->createMeasuringPoints(ptr->m_pointsPerDecade, ptr->m_fMin, ptr->m_fMax);
 
-	ptr->saveBuffer(points, "fMeasuringPoints.txt");
-
-	exit(0);
+	saveBuffer(points, "fMeasuringPoints.txt");
 
 	std::vector<double>freqResp(points.size());
 
 	try {
-		dev->setAnalogOutputAmplitude(channelId, 5); // 200mV
-
-		//dev->setAnalogOutputAmplitude(channelId, 0.2); // 200mV
+#if 1
+		dev->setAnalogOutputAmplitude(channelId, 0.7); // 200mV
 		dev->setAnalogOutputWaveform(channelId, AnalogDiscovery::WaveformSine);
+#elif
+		dev->setAnalogOutputAmplitude(0, 0.2); // 200mV
+		dev->setAnalogOutputWaveform(0, AnalogDiscovery::WaveformSine);
+		dev->setAnalogOutputAmplitude(1, 0.2); // 200mV
+		dev->setAnalogOutputWaveform(1, AnalogDiscovery::WaveformSine);
+#endif
 
 		auto currentFrequency = points.begin();
 		auto currentFreqResp = freqResp.begin();
 
 		while (!terminateRequest->load() && currentFrequency != points.end()) {
 
+#if 1
 			dev->setAnalogOutputFrequency(channelId, *currentFrequency);
 			dev->setAnalogOutputEnabled(channelId, true);
+#elif
+			dev->setAnalogOutputFrequency(0, *currentFrequency);
+			dev->setAnalogOutputEnabled(0, true);
+			dev->setAnalogOutputFrequency(1, *currentFrequency);
+			dev->setAnalogOutputEnabled(1, true);
+#endif
+
 			std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 			auto samples = readOneBuffer(dev, channelId, *currentFrequency);
@@ -282,10 +297,10 @@ void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscover
 			std::vector<double> keys(samples.size());
 			std::iota(std::begin(keys), std::end(keys), 0);
 
-			*currentFreqResp = ptr->dBuForVolts(ptr->rms(samples));
+			*currentFreqResp = dBuForVolts(rms(samples));
 
-			Debug::debug("Measurement", "[" + std::to_string(std::distance(points.begin(), currentFrequency))
-						 + " ch=" + std::to_string(channelId) + "] dBu @ "
+			Debug::debug("Measurement::run", std::to_string(std::distance(points.begin(), currentFrequency))
+						 + " ch=" + std::to_string(channelId) + "  "
 						 + std::to_string(double(*currentFrequency)) + "Hz: " + std::to_string(*currentFreqResp));
 
 			currentFrequency++;
@@ -300,5 +315,104 @@ void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscover
 
 	terminateRequest->store(true);
 
-	ptr->saveBuffer(freqResp, "measurement.txt");
+	saveBuffer(freqResp, "measurement.txt");
+}
+
+// Static
+void Measurement::calibrate(SharedTerminateFlag terminateRequest, SharedCalibrateAmout amount, SharedCommandFlag cmd, SharedAnalogDiscoveryHandle dev, std::list<SharedGPIOHandle> gpios, int channelId)
+{
+	try {
+		double refFrequency = 1000;	// We want 0dBu @ 1kHz
+		double refOutput = 1.08;	// 1.08Vpp -> 0.77 Vrms -> 0dBu input signal
+
+		dev->setAnalogOutputAmplitude(0, refOutput); // 200mV +/- amount
+		dev->setAnalogOutputWaveform(0, AnalogDiscovery::WaveformSine);
+
+		dev->setAnalogOutputFrequency(0, refFrequency);
+		dev->setAnalogOutputEnabled(0, true);
+
+		dev->setAnalogOutputAmplitude(1, refOutput); // 200mV +/- amount
+		dev->setAnalogOutputWaveform(1, AnalogDiscovery::WaveformSine);
+
+		dev->setAnalogOutputFrequency(1, refFrequency);
+		dev->setAnalogOutputEnabled(1, true);
+
+		auto volUpGPIO = getGPIOForName(gpios, "Volume Button +");
+		auto volDownGPIO = getGPIOForName(gpios, "Volume Button -");
+		char nCmdShadow = 0;
+
+#if 0
+		dev->setAnalogOutputAmplitude(channelId, refOutput); // 200mV +/- amount
+		dev->setAnalogOutputWaveform(channelId, AnalogDiscovery::WaveformSine);
+
+		dev->setAnalogOutputFrequency(channelId, refFrequency);
+		dev->setAnalogOutputEnabled(channelId, true);
+#endif
+		while (!terminateRequest->load()) {
+
+			auto samples = readOneBuffer(dev, channelId, refFrequency);
+
+			// Remove upper and lower 10% leads to better results
+			int removeCount = samples.size() * 0.1;
+			samples.erase(samples.begin(), samples.begin()+removeCount);
+			samples.erase(samples.end()-removeCount, samples.end());
+
+			//std::cout << "output: " << std::to_string(refOutput) << "V --- " << std::to_string(dBuForVolts(rms(samples))) << "dBu" << std::endl;
+			std::cout << "output: " << std::to_string(rms(refOutput)) << "Vrms(" << std::to_string(dBuForVolts(rms(refOutput))) << "dBu) --- input: "
+					  << std::to_string(rms(samples)) << "Vrms(" <<  std::to_string(dBuForVolts(rms(samples))) << "dBu) ---"
+					  << std::to_string(*std::max_element(samples.begin(), samples.end())) << "Vmax" << std::endl;
+
+
+			if (nCmdShadow == 'u') {
+				nCmdShadow = 0;
+				volUpGPIO->setValue(!volUpGPIO->getValue());
+			} else if (nCmdShadow == 'd') {
+				nCmdShadow = 0;
+				volDownGPIO->setValue(!volDownGPIO->getValue());
+			}
+
+
+			char ncmd = cmd->load();
+			if (ncmd == 's') {
+				cmd->store(0);
+				std::cout << "saving buffer..." << std::endl;
+				saveBuffer(samples, "samples.txt");
+			} else if (ncmd == 'u' && !nCmdShadow) {
+				cmd->store(0);
+				nCmdShadow = 'u';
+				std::cout << "volume up..." << std::endl;
+				volUpGPIO->setValue(!volUpGPIO->getValue());
+			} else if (ncmd == 'd' && !nCmdShadow) {
+				cmd->store(0);
+				nCmdShadow = 'd';
+				std::cout << "volume down..." << std::endl;
+				volDownGPIO->setValue(!volDownGPIO->getValue());
+			}
+
+
+			double namount = amount->load();
+
+			if (namount != 0) {
+				refOutput += namount;
+				amount->store(0);
+
+				dev->setAnalogOutputAmplitude(0, refOutput);
+				dev->setAnalogOutputEnabled(0, true);
+				dev->setAnalogOutputAmplitude(1, refOutput);
+				dev->setAnalogOutputEnabled(1, true);
+			}
+#if 0
+			dev->setAnalogOutputAmplitude(channelId, refOutput);
+			dev->setAnalogOutputEnabled(channelId, true);
+#endif
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+		}
+	} catch(AnalogDiscoveryException e) {
+		std::cerr << e.what() << std::endl;
+	} catch (std::exception e) {
+		std::cerr << e.what() << std::endl;
+	}
+
+	terminateRequest->store(true);
 }

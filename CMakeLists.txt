@@ -1,11 +1,14 @@
 project(FreqResp)
 cmake_minimum_required(VERSION 2.8)
 
-set(SRC_LIST analogdiscovery.cpp gpio.cpp measurement.cpp main.cpp default.h specialkeyboard.cpp tests.cpp debug.cpp)
+set(SRC_LIST analogdiscovery.cpp gpio.cpp measurement.cpp main.cpp default.h specialkeyboard.cpp tests.cpp debug.cpp encoder.cpp types.cpp)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     add_definitions(-std=c++11)
 endif()
+
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall")
 
 link_directories(/usr/lib64/)
 

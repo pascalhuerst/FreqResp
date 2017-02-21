@@ -15,11 +15,14 @@ public:
 		LevelError		= 1,
 		LevelWarning	= 2,
 		LevelDebug		= 3,
-		LevelVerbose	= 4
+		LevelVerbose	= 4,
+		LevelLast		= 5	//Sentinell
 	};
 
-	Level getDebugLevel();
-	void setDebugLevel(Level l);
+	static Level getDebugLevel();
+	static void setDebugLevel(Level l);
+
+	static std::string name(Level l);
 
 	static void error(const std::string& name, const std::string& msg);
 	static void warning(const std::string& name, const std::string& msg);

@@ -29,6 +29,7 @@ char SpecialKeyboard::kbhit()
 		read(STDIN_FILENO, &ret, 1);
 		return ret;
 	}
+	return 0;
 }
 
 void SpecialKeyboard::nonblock(bool enable)
@@ -43,8 +44,10 @@ void SpecialKeyboard::nonblock(bool enable)
 		ttystate.c_lflag &= ~ICANON;
 		//minimum of number input read.
 		ttystate.c_cc[VMIN] = 1;
+		//no echo
+		ttystate.c_lflag &= ~ECHO;
 	} else {
-		//turn on canonical mode
+		ttystate.c_lflag |= ECHO;
 		ttystate.c_lflag |= ICANON;
 	}
 	//set the terminal attributes.

@@ -143,7 +143,7 @@ double AnalogDiscovery::setAnalogInputSamplingFreq(double f)
 	if (!(std::fabs(f - actual) < std::numeric_limits<double>::epsilon())) {
 		std::string dbg = "Sampling Frequency Differs: desired=" + std::to_string(f) +
 				" actual=" + std::to_string(actual);
-		Debug::debug("AnalogDiscovery", dbg);
+		Debug::verbose("AnalogDiscovery", dbg);
 	}
 
 	return actual;
@@ -198,7 +198,7 @@ double AnalogDiscovery::setAnalogInputAcquisitionDuration(double s)
 	if (!(std::fabs(s - actual) < std::numeric_limits<double>::epsilon())) {
 		std::string dbg = "Acquisition Duration Differs: desired=" + std::to_string(s) +
 				" actual=" + std::to_string(actual);
-		Debug::debug("AnalogDiscovery", dbg);
+		Debug::verbose("AnalogDiscovery", dbg);
 	}
 	return actual;
 }

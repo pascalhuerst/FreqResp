@@ -4,6 +4,7 @@
 #include <string>
 #include <fstream>
 #include <list>
+#include <chrono>
 
 class GPIOException : public std::exception {
 public:
@@ -28,6 +29,7 @@ public:
 		DirectionIn = 0x01,
 		DirectionOut = 0x00
 	};
+
 
 	virtual void setDirection(Direction d) = 0;
 	virtual void setValue(bool v) = 0;
