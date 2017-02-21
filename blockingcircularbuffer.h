@@ -35,6 +35,8 @@ public:
 			std::cerr << "Buffer (" << m_name << ") not initialized!" << std::endl;
 		}
 
+		std::cout << "availableToRead=" << availableToRead() << " availableToWrite" << availableToWrite() << std::endl;
+
 		std::unique_lock<std::mutex> mlock(m_mutex);
 		while (availableToRead() < size || !m_buffer) {
 			m_condition.wait(mlock);
@@ -66,6 +68,7 @@ public:
 		m_bytesWritten += size;
 
 		for (unsigned int i=0; i<size; i++) {
+			//std::cout << "Writing " << buffer[i] << " to blocking buffer" << std::endl;
 			m_writeIndex++;
 			m_writeIndex = m_writeIndex % m_size;
 			m_buffer[m_writeIndex] = buffer[i];

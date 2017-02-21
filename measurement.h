@@ -138,7 +138,7 @@ public:
 	bool isRunning();
 
 	//Hmm... rethink
-	static void calibrate(SharedTerminateFlag terminateRequest, SharedCalibrateAmout amount, SharedCommandFlag cmd, SharedAnalogDiscoveryHandle dev, std::list<SharedGPIOHandle> gpios, int channelId);
+	static void calibrate(SharedTerminateFlag terminateRequest, SharedCalibrateAmout amount, SharedCommandFlag cmd, SharedAnalogDiscoveryHandle dev, int channelId);
 private:
 	std::string m_name;
 	SharedAnalogDiscoveryHandle m_dev;

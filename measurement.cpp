@@ -319,7 +319,7 @@ void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscover
 }
 
 // Static
-void Measurement::calibrate(SharedTerminateFlag terminateRequest, SharedCalibrateAmout amount, SharedCommandFlag cmd, SharedAnalogDiscoveryHandle dev, std::list<SharedGPIOHandle> gpios, int channelId)
+void Measurement::calibrate(SharedTerminateFlag terminateRequest, SharedCalibrateAmout amount, SharedCommandFlag cmd, SharedAnalogDiscoveryHandle dev, int channelId)
 {
 	try {
 		double refFrequency = 1000;	// We want 0dBu @ 1kHz
@@ -336,10 +336,6 @@ void Measurement::calibrate(SharedTerminateFlag terminateRequest, SharedCalibrat
 
 		dev->setAnalogOutputFrequency(1, refFrequency);
 		dev->setAnalogOutputEnabled(1, true);
-
-		auto volUpGPIO = getGPIOForName(gpios, "Volume Button +");
-		auto volDownGPIO = getGPIOForName(gpios, "Volume Button -");
-		char nCmdShadow = 0;
 
 #if 0
 		dev->setAnalogOutputAmplitude(channelId, refOutput); // 200mV +/- amount
@@ -362,39 +358,19 @@ void Measurement::calibrate(SharedTerminateFlag terminateRequest, SharedCalibrat
 					  << std::to_string(rms(samples)) << "Vrms(" <<  std::to_string(dBuForVolts(rms(samples))) << "dBu) ---"
 					  << std::to_string(*std::max_element(samples.begin(), samples.end())) << "Vmax" << std::endl;
 
-
-			if (nCmdShadow == 'u') {
-				nCmdShadow = 0;
-				volUpGPIO->setValue(!volUpGPIO->getValue());
-			} else if (nCmdShadow == 'd') {
-				nCmdShadow = 0;
-				volDownGPIO->setValue(!volDownGPIO->getValue());
-			}
-
-
+			// Commands
 			char ncmd = cmd->load();
 			if (ncmd == 's') {
 				cmd->store(0);
 				std::cout << "saving buffer..." << std::endl;
 				saveBuffer(samples, "samples.txt");
-			} else if (ncmd == 'u' && !nCmdShadow) {
-				cmd->store(0);
-				nCmdShadow = 'u';
-				std::cout << "volume up..." << std::endl;
-				volUpGPIO->setValue(!volUpGPIO->getValue());
-			} else if (ncmd == 'd' && !nCmdShadow) {
-				cmd->store(0);
-				nCmdShadow = 'd';
-				std::cout << "volume down..." << std::endl;
-				volDownGPIO->setValue(!volDownGPIO->getValue());
 			}
 
-
+			// Calibration Amount
 			double namount = amount->load();
-
 			if (namount != 0) {
-				refOutput += namount;
 				amount->store(0);
+				refOutput += namount;
 
 				dev->setAnalogOutputAmplitude(0, refOutput);
 				dev->setAnalogOutputEnabled(0, true);

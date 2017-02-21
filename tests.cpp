@@ -2,6 +2,7 @@
 #include "specialkeyboard.h"
 #include "analogdiscovery.h"
 #include "measurement.h"
+#include "encoder.h"
 
 #include <iostream>
 #include <thread>
@@ -71,11 +72,13 @@ void manualInputLevelCalibration()
 	adr1->setValue(true);
 	speakerPower->setValue(true);
 
+	Encoder volume(getGPIOForName(gpios, "Volume Button +"), getGPIOForName(gpios, "Volume Button -"));
+
 	auto calibrationAbout = createSharedCalibrateAmount();
 	auto commandFlag = createSharedCommandFlag();
 
 
-	std::thread t1(Measurement::calibrate, terminateRequest, calibrationAbout, commandFlag, sharedDev, gpios, 0); //ch1 = red
+	std::thread t1(Measurement::calibrate, terminateRequest, calibrationAbout, commandFlag, sharedDev, 0); //ch1 = red
 
 	do {
 		if (g == '+') {
@@ -85,9 +88,11 @@ void manualInputLevelCalibration()
 		} else if (g == 's') { // Tell thread function to save buffer as buffer.txt
 			commandFlag->store('s');
 		} else if (g == 'u') { // Tell thread tol volume up
-			commandFlag->store('u');
+			std::cout << "Volume Increment.." << std::endl;
+			volume.increment();
 		} else if (g == 'd') { // Tell thread volume down
-			commandFlag->store('d');
+			std::cout << "Volume Decrement.." << std::endl;
+			volume.decrement();
 		}
 
 		while ((g = kb.kbhit()) == 0) std::this_thread::sleep_for(std::chrono::milliseconds(100));

@@ -1,7 +1,9 @@
 #include "encoder.h"
 #include "types.h"
+#include "debug.h"
 
 #include <thread>
+
 
 Encoder::Encoder(SharedGPIOHandle a, SharedGPIOHandle b) :
 	m_a(a),
@@ -51,6 +53,11 @@ void Encoder::doWork(SharedTerminateFlag terminateRequest, SharedGPIOHandle a, S
 //Static
 void Encoder::doDecrement(SharedGPIOHandle a, SharedGPIOHandle b)
 {
+	Debug::error("Encoder::doDecrement", "");
+	a->setValue(!a->getValue());
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	b->setValue(!b->getValue());
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	a->setValue(!a->getValue());
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	b->setValue(!b->getValue());
@@ -60,6 +67,11 @@ void Encoder::doDecrement(SharedGPIOHandle a, SharedGPIOHandle b)
 //Static
 void Encoder::doIncrement(SharedGPIOHandle a, SharedGPIOHandle b)
 {
+	Debug::error("Encoder::doIncrement", "");
+	b->setValue(!b->getValue());
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	a->setValue(!a->getValue());
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	b->setValue(!b->getValue());
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	a->setValue(!a->getValue());
