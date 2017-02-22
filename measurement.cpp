@@ -14,6 +14,10 @@ std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle a
 {
 	std::list<SharedGPIOHandle> gpios;
 
+	// Some Mappings are Speaker dependent :(
+
+#if 0
+	// #### MAPPING AS IN SCHEMATICS (DEFAULT) ####
 	// Analog Discovery GPIOs
 	// Outputs
 	gpios.push_back(createGPIO("Front_LED_1", analogDiscovery, 0, GPIO::DirectionOut, false));
@@ -50,6 +54,43 @@ std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle a
 	gpios.push_back(createGPIO("Led 3", 505, GPIO::DirectionIn, false));
 	gpios.push_back(createGPIO("Led 4", 339, GPIO::DirectionIn, false));
 	gpios.push_back(createGPIO("Led 5", 504, GPIO::DirectionIn, false));
+#endif
+#if 1
+	// #### Stereo Cubes Mapping ####
+	// Analog Discovery GPIOs
+	// Outputs
+	gpios.push_back(createGPIO("Front_LED_1", analogDiscovery, 0, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Front_LED_2", analogDiscovery, 1, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Front_LED_3", analogDiscovery, 2, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Front_LED_4", analogDiscovery, 3, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Front_LED_5", analogDiscovery, 4, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Relais_Power", analogDiscovery, 9, GPIO::DirectionOut, true)); // This is the main Power for the speaker
+	gpios.push_back(createGPIO("Relais_K109", analogDiscovery, 10, GPIO::DirectionOut, false)); // This is to check, if load resistors are damaged
+	gpios.push_back(createGPIO("Relais_K108", analogDiscovery, 11, GPIO::DirectionOut, false)); // 4 or 6 Ohm Load for J103-J105
+	gpios.push_back(createGPIO("Relais_K104", analogDiscovery, 12, GPIO::DirectionOut, false));	// 4 or 6 Ohm Load for J100-J102
+
+	// Load is switched thru a multiplexer. Speaker outputs can not shortcirquid!
+	// So we have one nEn and two ADR lines here
+	gpios.push_back(createGPIO("ADR0", analogDiscovery, 13, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("ADR1", analogDiscovery, 14, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Enable", analogDiscovery, 15, GPIO::DirectionOut, false));
+
+	// MinnowBoard GPIOs
+	// Outputs
+	gpios.push_back(createGPIO("Enc3", 479, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Volume Button +", 472, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Volume Button -", 485, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Power Button", 484, GPIO::DirectionOut, false));
+	gpios.push_back(createGPIO("Reset Button", 474, GPIO::DirectionOut, true)); //Investigate: This must be true, othewise speaker tries to flash. Inverted?
+	gpios.push_back(createGPIO("Setup Button", 338, GPIO::DirectionOut, false));
+	// Inputs
+	gpios.push_back(createGPIO("Led 1", 509, GPIO::DirectionIn, false));
+	gpios.push_back(createGPIO("Led 2", 340, GPIO::DirectionIn, false));
+	gpios.push_back(createGPIO("Led 3", 505, GPIO::DirectionIn, false));
+	gpios.push_back(createGPIO("Led 4", 339, GPIO::DirectionIn, false));
+	gpios.push_back(createGPIO("Led 5", 504, GPIO::DirectionIn, false));
+
+#endif
 
 	return gpios;
 }
@@ -381,7 +422,7 @@ void Measurement::calibrate(SharedTerminateFlag terminateRequest, SharedCalibrat
 			dev->setAnalogOutputAmplitude(channelId, refOutput);
 			dev->setAnalogOutputEnabled(channelId, true);
 #endif
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+			//std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 		}
 	} catch(AnalogDiscoveryException e) {

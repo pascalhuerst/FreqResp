@@ -30,7 +30,6 @@ public:
 		DirectionOut = 0x00
 	};
 
-
 	virtual void setDirection(Direction d) = 0;
 	virtual void setValue(bool v) = 0;
 
@@ -44,7 +43,6 @@ private:
 };
 
 typedef std::shared_ptr<GPIO> SharedGPIOHandle;
-
 class AnalogDiscovery;
 
 class GPIOAnalogDiscovery : public GPIO

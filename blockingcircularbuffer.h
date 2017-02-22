@@ -15,8 +15,6 @@ public:
 		m_buffer(nullptr),
 		m_size(size),
 		m_name(name),
-		m_bytesRead(0),
-		m_bytesWritten(0),
 		m_readIndex(0),
 		m_writeIndex(0)
 	{
@@ -29,20 +27,13 @@ public:
 			delete [] m_buffer;
 	}
 
-	void get(T *buffer, unsigned int size)
+	bool get(T *buffer, unsigned int size, std::chrono::milliseconds timeout)
 	{
-		if (!m_buffer) {
-			std::cerr << "Buffer (" << m_name << ") not initialized!" << std::endl;
-		}
-
-		std::cout << "availableToRead=" << availableToRead() << " availableToWrite" << availableToWrite() << std::endl;
-
 		std::unique_lock<std::mutex> mlock(m_mutex);
 		while (availableToRead() < size || !m_buffer) {
-			m_condition.wait(mlock);
+			if (m_condition.wait_for(mlock, timeout) == std::cv_status::timeout)
+				return false;
 		}
-
-		m_bytesRead += size;
 
 		for (unsigned int i=0; i<size; i++) {
 			m_readIndex++;
@@ -51,30 +42,27 @@ public:
 		}
 
 		m_condition.notify_one();
+
+		return true;
 	}
 
-	void set(T *buffer, unsigned int size)
+	bool set(T *buffer, unsigned int size, std::chrono::milliseconds timeout)
 	{
-		if (!m_buffer) {
-			std::cerr << "Buffer (" << m_name << ") not initialized!" << std::endl;
-		}
-
 		std::unique_lock<std::mutex> mlock(m_mutex);
 		while (availableToWrite() < size || !m_buffer) {
-			m_condition.wait(mlock);
+			if (m_condition.wait_for(mlock, timeout) == std::cv_status::timeout)
+				return false;
 		}
 
-
-		m_bytesWritten += size;
-
 		for (unsigned int i=0; i<size; i++) {
-			//std::cout << "Writing " << buffer[i] << " to blocking buffer" << std::endl;
 			m_writeIndex++;
 			m_writeIndex = m_writeIndex % m_size;
 			m_buffer[m_writeIndex] = buffer[i];
 		}
 
 		m_condition.notify_one();
+
+		return true;
 	}
 
 	inline unsigned int availableToRead() const
@@ -84,7 +72,7 @@ public:
 
 	inline unsigned int availableToWrite() const
 	{
-		int tmp = m_readIndex - m_writeIndex - 1;
+		int tmp = m_readIndex - m_writeIndex;
 		int distance = tmp < 0 ? -tmp : tmp;
 
 		return m_writeIndex < m_readIndex ? distance : m_size - distance;
@@ -108,9 +96,6 @@ private:
 	std::mutex m_mutex;
 	std::condition_variable m_condition;
 
-	std::atomic<unsigned long> m_bytesRead;
-	std::atomic<unsigned long> m_bytesWritten;
-
 	std::atomic<unsigned int> m_readIndex;
 	std::atomic<unsigned int> m_writeIndex;
 
@@ -124,9 +109,7 @@ private:
 		m_buffer = new T[m_size];
 		memset(m_buffer, 0, m_size);
 
-		m_bytesRead = 0;
-		m_bytesWritten = 0;
-		m_readIndex = 0;
+		m_readIndex = m_size;
 		m_writeIndex = 0;
 
 		m_condition.notify_one();

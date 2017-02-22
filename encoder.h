@@ -23,7 +23,7 @@ public:
 	};
 
 private:
-	static void doWork(SharedTerminateFlag terminateRequest, SharedGPIOHandle a, SharedGPIOHandle b, std::shared_ptr<BlockingCircularBuffer<Op>> buffer);
+	static void doWork(SharedTerminateFlag terminateRequest, SharedGPIOHandle a, SharedGPIOHandle b, std::shared_ptr<BlockingCircularBuffer<Op> > buffer);
 	static void doIncrement(SharedGPIOHandle a, SharedGPIOHandle b);
 	static void doDecrement(SharedGPIOHandle a, SharedGPIOHandle b);
 
