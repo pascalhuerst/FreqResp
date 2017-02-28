@@ -78,18 +78,18 @@ bool AnalogDiscovery::isOpen(void) const
 	return m_opened;
 }
 
-AnalogDiscovery::DeviceState AnalogDiscovery::analogOutputStatus(int channelId)
+AnalogDiscovery::DeviceState AnalogDiscovery::analogOutputStatus(int channel)
 {
 	DwfState state;
-	checkAndThrow(FDwfAnalogOutStatus(m_devHandle, channelId, &state),
+	checkAndThrow(FDwfAnalogOutStatus(m_devHandle, channel, &state),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 	return static_cast<AnalogDiscovery::DeviceState>(state);
 }
 
-AnalogDiscovery::DeviceState AnalogDiscovery::analogInputStatus(int channelId)
+AnalogDiscovery::DeviceState AnalogDiscovery::analogInputStatus(int channel)
 {
 	DwfState state;
-	checkAndThrow(FDwfAnalogInStatus(m_devHandle, channelId, &state),
+	checkAndThrow(FDwfAnalogInStatus(m_devHandle, channel, &state),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 	return static_cast<AnalogDiscovery::DeviceState>(state);
 }
@@ -318,9 +318,9 @@ AnalogDiscovery::SampleState AnalogDiscovery::analogInSampleState()
 	return ret;
 }
 
-void AnalogDiscovery::readAnalogInput(int channelId, double *buffer, int size)
+void AnalogDiscovery::readAnalogInput(int channel, double *buffer, int size)
 {
-	checkAndThrow(FDwfAnalogInStatusData(m_devHandle, channelId, buffer, size),
+	checkAndThrow(FDwfAnalogInStatusData(m_devHandle, channel, buffer, size),
 				  __PRETTY_FUNCTION__, __FILE__, __LINE__);
 }
 
@@ -390,11 +390,11 @@ std::list<AnalogDiscovery::DeviceId> AnalogDiscovery::getDevices()
 }
 
 //Static
-void AnalogDiscovery::readSamples(SharedAnalogDiscoveryHandle handle, int channelId, double *buffer, int bufferSize, std::vector<double> *target, int available)
+void AnalogDiscovery::readSamples(SharedAnalogDiscoveryHandle handle, int channel, double *buffer, int bufferSize, std::vector<double> *target, int available)
 {
 	while (available) {
 		int count = available > bufferSize ? bufferSize : available;
-		handle->readAnalogInput(channelId, buffer, count);
+		handle->readAnalogInput(channel, buffer, count);
 		copy(&buffer[0], &buffer[count], back_inserter(*target));
 		available -= count;
 	}

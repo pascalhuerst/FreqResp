@@ -125,7 +125,7 @@ public:
 	int analogInputBufferSize();
 	bool isOpen(void) const;
 
-	void readAnalogInput(int channelId, double *buffer, int size);
+	void readAnalogInput(int channel, double *buffer, int size);
 	SampleState analogInSampleState();
 
 	enum DeviceState {
@@ -140,13 +140,13 @@ public:
 	};
 	const static std::vector<std::string> s_stateNames;
 
-	DeviceState analogOutputStatus(int channelId);
-	DeviceState analogInputStatus(int channelId);
+	DeviceState analogOutputStatus(int channel);
+	DeviceState analogInputStatus(int channel);
 
 	static std::list<DeviceId> getDevices();
 	static SharedAnalogDiscoveryHandle createSharedAnalogDiscoveryHandle(AnalogDiscovery::DeviceId deviceId);
 	static SharedAnalogDiscoveryHandle getFirstAvailableDevice();
-	static void readSamples(SharedAnalogDiscoveryHandle handle, int channelId, double *buffer, int bufferSize, std::vector<double> *target, int available);
+	static void readSamples(SharedAnalogDiscoveryHandle handle, int channel, double *buffer, int bufferSize, std::vector<double> *target, int available);
 
 	// Digital IO
 	enum IODirection {

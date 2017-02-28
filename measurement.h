@@ -11,7 +11,7 @@
 
 
 // Thread function, that polls and reads the inputbuffer
-auto readOneBuffer = [](SharedAnalogDiscoveryHandle handle, int channelId, double currentFrequency)
+auto readOneBuffer = [](SharedAnalogDiscoveryHandle handle, int channel, double currentFrequency)
 {
 	const double oversampling = 100.0;
 	const int desiredSampleCount = 8192;
@@ -21,8 +21,8 @@ auto readOneBuffer = [](SharedAnalogDiscoveryHandle handle, int channelId, doubl
 
 	std::vector<double> samples;
 
-	handle->setAnalogInputEnabled(channelId, true);
-	handle->setAnalogInputRange(channelId, 5);
+	handle->setAnalogInputEnabled(channel, true);
+	handle->setAnalogInputRange(channel, 5);
 
 	handle->setAnalogInputBufferSize(desiredSampleCount);
 	int bufferSize = handle->analogInputBufferSize();
@@ -46,10 +46,10 @@ auto readOneBuffer = [](SharedAnalogDiscoveryHandle handle, int channelId, doubl
 		}
 
 		if (!sampleState.available)
-			deviceState = handle->analogInputStatus(channelId);
+			deviceState = handle->analogInputStatus(channel);
 
 		if (sampleState.available)
-			AnalogDiscovery::readSamples(handle, channelId, buffer, bufferSize, &samples, sampleState.available);
+			AnalogDiscovery::readSamples(handle, channel, buffer, bufferSize, &samples, sampleState.available);
 
 	} while (deviceState != AnalogDiscovery::DeviceStateDone);
 
@@ -130,19 +130,18 @@ void saveBuffer(const std::vector<double>& s, const std::string& fileName);
 class Measurement
 {
 public:
-	Measurement(const std::string &name, SharedAnalogDiscoveryHandle dev, GPIOSnapshot gpioSnapshot, double fMin, double fMax, int pointsPerDecade);
+	Measurement(const std::string &name, SharedAnalogDiscoveryHandle dev, double fMin, double fMax, int pointsPerDecade);
 	~Measurement();
 
-	void start(int channelId);
+	void start(int channel, double outputCalibration);
 	void stop();
 	bool isRunning();
 
 	//Hmm... rethink
-	static void calibrate(SharedTerminateFlag terminateRequest, SharedCalibrateAmout amount, SharedCommandFlag cmd, SharedAnalogDiscoveryHandle dev, int channelId);
+	static void calibrate(SharedTerminateFlag terminateRequest, SharedCalibrateAmout amount, SharedCommandFlag cmd, SharedAnalogDiscoveryHandle dev);
 private:
 	std::string m_name;
 	SharedAnalogDiscoveryHandle m_dev;
-	GPIOSnapshot m_gpioSnapshot;
 	bool m_isRunning;
 	SharedTerminateFlag m_terminateRequest;
 	std::thread *m_thread;
@@ -152,6 +151,6 @@ private:
 
 
 	std::vector<double> createMeasuringPoints(int pointsPerDecade, double minHz, double maxHz);
-	static void run(SharedTerminateFlag terminateRequest, SharedAnalogDiscoveryHandle dev, int channelId, Measurement *ptr);
+	static void run(SharedTerminateFlag terminateRequest, SharedAnalogDiscoveryHandle dev, int channel, double outputCalibration, Measurement *ptr);
 
 };

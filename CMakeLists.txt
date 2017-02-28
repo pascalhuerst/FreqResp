@@ -13,6 +13,7 @@ set(SRC_LIST
 	encoder.cpp
 	types.cpp
 	volume.cpp
+	speaker.cpp
 )
 
 if(CMAKE_COMPILER_IS_GNUCXX)

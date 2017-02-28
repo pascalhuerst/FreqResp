@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iomanip>
 #include <iterator>
 #include <numeric>
 #include <map>
@@ -194,11 +195,35 @@ void saveBuffer(const std::vector<double>& s, const std::string& fileName)
 	outfile.close();
 }
 
+void saveMeasurement(const std::vector<double>& frequencies, const std::vector<double>& responses, const std::string& fileName)
+{
+	Debug::debug("saveMeasurement",  "Saving measurement to file: " + fileName);
+
+	std::ofstream outfile(fileName, std::ofstream::out);
+
+	if (!outfile.is_open()) {
+		Debug::error("saveBuffer", "Can not save buffer! File not opened: " + fileName);
+		return;
+	}
+
+	auto currentResponse = responses.begin();
+	auto currentFrequency = frequencies.begin();
+
+	while (currentResponse != responses.end() && currentFrequency != frequencies.end()) {
+		outfile << std::setprecision(6) << *currentFrequency << "," << std::setprecision(6) << *currentResponse << std::endl;
+		currentResponse++;
+		currentFrequency++;
+	}
+
+	outfile.flush();
+	outfile.close();
+}
+
+
 // Class
-Measurement::Measurement(const std::string &name, SharedAnalogDiscoveryHandle dev, GPIOSnapshot gpioSnapshot, double fMin, double fMax, int pointsPerDecade) :
+Measurement::Measurement(const std::string &name, SharedAnalogDiscoveryHandle dev, double fMin, double fMax, int pointsPerDecade) :
 	m_name(name),
 	m_dev(dev),
-	m_gpioSnapshot(gpioSnapshot),
 	m_isRunning(false),
 	m_terminateRequest(createSharedTerminateFlag()),
 	m_thread(nullptr),
@@ -213,7 +238,7 @@ Measurement::~Measurement()
 	stop();
 }
 
-void Measurement::start(int channelId)
+void Measurement::start(int channel, double outputCalibration)
 {
 	Debug::verbose("Measurement::start", "Starting measurement");
 
@@ -222,10 +247,8 @@ void Measurement::start(int channelId)
 		return;
 	}
 
-	setGPIOSnapshot(m_gpioSnapshot);
-
 	m_terminateRequest->store(false);
-	m_thread = new std::thread(Measurement::run, m_terminateRequest, m_dev, channelId, this);
+	m_thread = new std::thread(Measurement::run, m_terminateRequest, m_dev, channel, outputCalibration, this);
 	m_isRunning = true;
 }
 
@@ -291,44 +314,31 @@ std::vector<double> Measurement::createMeasuringPoints(int pointsPerDecade, doub
 }
 
 // Static
-void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscoveryHandle dev, int channelId, Measurement *ptr)
+void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscoveryHandle dev, int channel, double outputCalibration, Measurement *ptr)
 {
-	// Create frequency Map with measuring frequencies
+	// Create frequency vector containing measuring frequencies
 	auto points = ptr->createMeasuringPoints(ptr->m_pointsPerDecade, ptr->m_fMin, ptr->m_fMax);
 
-	saveBuffer(points, "fMeasuringPoints.txt");
+	//saveBuffer(points, "fMeasuringPoints.txt");
 
 	std::vector<double>freqResp(points.size());
 
 	try {
-#if 1
-		dev->setAnalogOutputAmplitude(channelId, 0.7); // 200mV
-		dev->setAnalogOutputWaveform(channelId, AnalogDiscovery::WaveformSine);
-#elif
-		dev->setAnalogOutputAmplitude(0, 0.2); // 200mV
-		dev->setAnalogOutputWaveform(0, AnalogDiscovery::WaveformSine);
-		dev->setAnalogOutputAmplitude(1, 0.2); // 200mV
-		dev->setAnalogOutputWaveform(1, AnalogDiscovery::WaveformSine);
-#endif
+
+		dev->setAnalogOutputAmplitude(channel, 1.08 + outputCalibration); // 1.08Vpp -> 0.77 Vrms -> 0dBu input signal + calibration
+		dev->setAnalogOutputWaveform(channel, AnalogDiscovery::WaveformSine);
 
 		auto currentFrequency = points.begin();
 		auto currentFreqResp = freqResp.begin();
 
 		while (!terminateRequest->load() && currentFrequency != points.end()) {
 
-#if 1
-			dev->setAnalogOutputFrequency(channelId, *currentFrequency);
-			dev->setAnalogOutputEnabled(channelId, true);
-#elif
-			dev->setAnalogOutputFrequency(0, *currentFrequency);
-			dev->setAnalogOutputEnabled(0, true);
-			dev->setAnalogOutputFrequency(1, *currentFrequency);
-			dev->setAnalogOutputEnabled(1, true);
-#endif
+			dev->setAnalogOutputFrequency(channel, *currentFrequency);
+			dev->setAnalogOutputEnabled(channel, true);
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-			auto samples = readOneBuffer(dev, channelId, *currentFrequency);
+			auto samples = readOneBuffer(dev, channel, *currentFrequency);
 
 			// Remove upper and lower 10% leads to better results
 			int removeCount = samples.size() * 0.1;
@@ -341,13 +351,16 @@ void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscover
 			*currentFreqResp = dBuForVolts(rms(samples));
 
 			Debug::debug("Measurement::run", std::to_string(std::distance(points.begin(), currentFrequency))
-						 + " ch=" + std::to_string(channelId) + "  "
+						 + " ch=" + std::to_string(channel) + "  "
 						 + std::to_string(double(*currentFrequency)) + "Hz: " + std::to_string(*currentFreqResp));
 
 			currentFrequency++;
 			currentFreqResp++;
 
 		}
+
+		saveMeasurement(points, freqResp, "FreqResp.txt");
+
 	} catch(AnalogDiscoveryException e) {
 		std::cerr << e.what() << std::endl;
 	} catch (std::exception e) {
@@ -360,48 +373,39 @@ void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscover
 }
 
 // Static
-void Measurement::calibrate(SharedTerminateFlag terminateRequest, SharedCalibrateAmout amount, SharedCommandFlag cmd, SharedAnalogDiscoveryHandle dev, int channelId)
+void Measurement::calibrate(SharedTerminateFlag terminateRequest, SharedCalibrateAmout amount, SharedCommandFlag cmd, SharedAnalogDiscoveryHandle dev)
 {
+	// It does not matter on which channel (= left/right) we measure to calibrate,
+	// since the inputsignal is mono anyways! But we have to switch between woofer, sub and tweeter,
+	// to see which has the highest output at 1 kHz
+	const int channel = 0;
+
 	try {
 		double refFrequency = 1000;	// We want 0dBu @ 1kHz
 		double refOutput = 1.08;	// 1.08Vpp -> 0.77 Vrms -> 0dBu input signal
 
-		dev->setAnalogOutputAmplitude(0, refOutput); // 200mV +/- amount
-		dev->setAnalogOutputWaveform(0, AnalogDiscovery::WaveformSine);
+		dev->setAnalogOutputAmplitude(channel, refOutput);
+		dev->setAnalogOutputWaveform(channel, AnalogDiscovery::WaveformSine);
 
-		dev->setAnalogOutputFrequency(0, refFrequency);
-		dev->setAnalogOutputEnabled(0, true);
+		dev->setAnalogOutputFrequency(channel, refFrequency);
+		dev->setAnalogOutputEnabled(channel, true);
 
-		dev->setAnalogOutputAmplitude(1, refOutput); // 200mV +/- amount
-		dev->setAnalogOutputWaveform(1, AnalogDiscovery::WaveformSine);
-
-		dev->setAnalogOutputFrequency(1, refFrequency);
-		dev->setAnalogOutputEnabled(1, true);
-
-#if 0
-		dev->setAnalogOutputAmplitude(channelId, refOutput); // 200mV +/- amount
-		dev->setAnalogOutputWaveform(channelId, AnalogDiscovery::WaveformSine);
-
-		dev->setAnalogOutputFrequency(channelId, refFrequency);
-		dev->setAnalogOutputEnabled(channelId, true);
-#endif
 		while (!terminateRequest->load()) {
 
-			auto samples = readOneBuffer(dev, channelId, refFrequency);
+			auto samples = readOneBuffer(dev, channel, refFrequency);
 
 			// Remove upper and lower 10% leads to better results
 			int removeCount = samples.size() * 0.1;
 			samples.erase(samples.begin(), samples.begin()+removeCount);
 			samples.erase(samples.end()-removeCount, samples.end());
 
-			//std::cout << "output: " << std::to_string(refOutput) << "V --- " << std::to_string(dBuForVolts(rms(samples))) << "dBu" << std::endl;
 			std::cout << "output: " << std::to_string(rms(refOutput)) << "Vrms(" << std::to_string(dBuForVolts(rms(refOutput))) << "dBu) --- input: "
 					  << std::to_string(rms(samples)) << "Vrms(" <<  std::to_string(dBuForVolts(rms(samples))) << "dBu) ---"
 					  << std::to_string(*std::max_element(samples.begin(), samples.end())) << "Vmax" << std::endl;
 
 			// Commands
 			char ncmd = cmd->load();
-			if (ncmd == 's') {
+			if (ncmd == 'b') {
 				cmd->store(0);
 				std::cout << "saving buffer..." << std::endl;
 				saveBuffer(samples, "samples.txt");
@@ -418,12 +422,6 @@ void Measurement::calibrate(SharedTerminateFlag terminateRequest, SharedCalibrat
 				dev->setAnalogOutputAmplitude(1, refOutput);
 				dev->setAnalogOutputEnabled(1, true);
 			}
-#if 0
-			dev->setAnalogOutputAmplitude(channelId, refOutput);
-			dev->setAnalogOutputEnabled(channelId, true);
-#endif
-			//std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
 		}
 	} catch(AnalogDiscoveryException e) {
 		std::cerr << e.what() << std::endl;

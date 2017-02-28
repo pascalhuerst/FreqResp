@@ -3,6 +3,7 @@
 #include "analogdiscovery.h"
 #include "measurement.h"
 #include "volume.h"
+#include "speaker.h"
 
 #include <iostream>
 #include <thread>
@@ -67,29 +68,32 @@ void manualInputLevelCalibration()
 	auto adr1 = getGPIOForName(gpios, "ADR1");
 	auto enable = getGPIOForName(gpios, "Enable");
 	auto speakerPower = getGPIOForName(gpios, "Relais_Power");
-
-	enable->setValue(true);
-	adr1->setValue(true);
 	speakerPower->setValue(true);
+
 
 	auto calibrationAbout = createSharedCalibrateAmount();
 	auto commandFlag = createSharedCommandFlag();
-
 	auto volumeControl = createVolume(getGPIOForName(gpios, "Volume Button +"), getGPIOForName(gpios, "Volume Button -"), false);
 
-	std::thread t1(Measurement::calibrate, terminateRequest, calibrationAbout, commandFlag, sharedDev, 0); //ch1 = red
+	std::thread t1(Measurement::calibrate, terminateRequest, calibrationAbout, commandFlag, sharedDev);
 
 	do {
 		if (g == '+') {
 			calibrationAbout->store(calibrationAbout->load() + 0.01);
 		} else if (g == '-') {
 			calibrationAbout->store(calibrationAbout->load() - 0.01);
-		} else if (g == 's') { // Tell thread function to save buffer as buffer.txt
-			commandFlag->store('s');
+		} else if (g == 'b') { // Tell thread function to save buffer as buffer.txt
+			commandFlag->store('b');
 		} else if (g == 'u') {
 			volumeControl->up();
 		} else if (g == 'd') {
 			volumeControl->down();
+		} else if (g == 'h') {
+			Speaker::setChannel(enable, adr0, adr1, Speaker::Hi);
+		} else if (g == 'm') {
+			Speaker::setChannel(enable, adr0, adr1, Speaker::Mid);
+		} else if (g == 'l') {
+			Speaker::setChannel(enable, adr0, adr1, Speaker::Lo);
 		}
 
 		while ((g = kb.kbhit()) == 0) std::this_thread::sleep_for(std::chrono::milliseconds(100));
