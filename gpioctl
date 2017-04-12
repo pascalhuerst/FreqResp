@@ -1,0 +1,29 @@
+#!/usr/bin/python
+'''Send a command to gpioctld via /run/gpioctld.socket
+
+Sends the command-line arguments to gpioctld as a single packet
+and then read the response as a single packet and print it to stdout.
+
+'''
+
+
+from socket import socket, AF_UNIX, SOCK_SEQPACKET, MSG_PEEK, MSG_TRUNC
+from sys import argv, exit, stderr
+
+s = socket(AF_UNIX, SOCK_SEQPACKET)
+s.connect("/run/gpioctld.socket")
+s.send(' '.join(argv[1:]))
+
+# With SEQPACKET you must read the whole message in one call.
+# The system call API for doing this is recv with MSG_PEEK|MSG_TRUNC,
+# but the python stdlib API doesn't support not passing a response buffer,
+# fortunately the returned string's length is not dependant on the size requested.
+msglen = len(s.recv(1, MSG_PEEK|MSG_TRUNC))
+if msglen == 0:
+	# Server disconnected without a response.
+	# This can only happen as an error, and should not be ignored.
+	stderr.write("gpioctld server disconnected without a response\n")
+	exit(1)
+
+msg = s.recv(msglen)
+print(msg)
