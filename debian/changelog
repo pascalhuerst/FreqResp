@@ -1,0 +1,5 @@
+freqresp (0.0.0-0) UNRELEASED; urgency=low
+
+  * Initial release. (Closes: #XXXXXX)
+
+ -- Richard Maw <richard.maw@codethink.co.uk>  Tue, 25 Apr 2017 15:50:00 +0100
