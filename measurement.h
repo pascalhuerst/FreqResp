@@ -115,7 +115,7 @@ struct GPIOState {
 };
 typedef std::map<SharedGPIOHandle, GPIOState> GPIOSnapshot;
 GPIOSnapshot createGPIOSnapshot(std::list<SharedGPIOHandle> gpios);
-SharedGPIOHandle getGPIOForName(std::list<SharedGPIOHandle> gpios, const std::string &name);
+
 void updateGPIOSnapshot(GPIOSnapshot *snapshot, SharedGPIOHandle gpio, GPIOState state);
 void setGPIOSnapshot(GPIOSnapshot snapshot);
 
@@ -137,6 +137,8 @@ public:
 	void stop();
 	bool isRunning();
 
+    std::string name() const;
+
 	//Hmm... rethink
 	static void calibrate(SharedTerminateFlag terminateRequest, SharedCalibrateAmout amount, SharedCommandFlag cmd, SharedAnalogDiscoveryHandle dev);
 private:
@@ -148,7 +150,6 @@ private:
 	double m_fMin;
 	double m_fMax;
 	int m_pointsPerDecade;
-
 
 	std::vector<double> createMeasuringPoints(int pointsPerDecade, double minHz, double maxHz);
 	static void run(SharedTerminateFlag terminateRequest, SharedAnalogDiscoveryHandle dev, int channel, double outputCalibration, Measurement *ptr);

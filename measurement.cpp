@@ -76,6 +76,9 @@ std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle a
 	gpios.push_back(createGPIO("ADR1", analogDiscovery, 14, GPIO::DirectionOut, false));
 	gpios.push_back(createGPIO("Enable", analogDiscovery, 15, GPIO::DirectionOut, false));
 
+
+#warning "!!!! Reenable MinnowBoard GPIOs !!!!"
+#if 0
 	// MinnowBoard GPIOs
 	// Outputs
 	gpios.push_back(createGPIO("Enc3", 479, GPIO::DirectionOut, false));
@@ -90,7 +93,7 @@ std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle a
 	gpios.push_back(createGPIO("Led 3", 505, GPIO::DirectionIn, false));
 	gpios.push_back(createGPIO("Led 4", 339, GPIO::DirectionIn, false));
 	gpios.push_back(createGPIO("Led 5", 504, GPIO::DirectionIn, false));
-
+#endif
 #endif
 
 	return gpios;
@@ -101,17 +104,6 @@ std::list<SharedGPIOHandle> loadDummyGPIOMapping(SharedAnalogDiscoveryHandle ana
 {
 	std::list<SharedGPIOHandle> ret;
 	return ret;
-}
-
-SharedGPIOHandle getGPIOForName(std::list<SharedGPIOHandle> gpios, const std::string &name)
-{
-	for (auto it=gpios.begin(); it!=gpios.end(); ++it) {
-		if ((*it)->getName() == name)
-			return *it;
-	}
-	Debug::warning("getGPIOForName", "GPIO with name \"" + name +  "\" does not exist!");
-
-	return nullptr;
 }
 
 GPIOSnapshot createGPIOSnapshot(std::list<SharedGPIOHandle> gpios)
@@ -276,6 +268,11 @@ bool Measurement::isRunning()
 	return m_isRunning;
 }
 
+std::string Measurement::name() const
+{
+    return m_name;
+}
+
 // create logarithmically well distributed measuring points,
 // so we have the same amount of measuring points in each decade.
 std::vector<double> Measurement::createMeasuringPoints(int pointsPerDecade, double minHz, double maxHz)
@@ -356,10 +353,9 @@ void Measurement::run(SharedTerminateFlag terminateRequest, SharedAnalogDiscover
 
 			currentFrequency++;
 			currentFreqResp++;
-
 		}
 
-		saveMeasurement(points, freqResp, "FreqResp.txt");
+        saveMeasurement(points, freqResp, ptr->name());
 
 	} catch(AnalogDiscoveryException e) {
 		std::cerr << e.what() << std::endl;

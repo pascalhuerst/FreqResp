@@ -19,26 +19,22 @@ const std::vector<std::string> AnalogDiscovery::s_stateNames = {
 	"Wait"
 };
 
-AnalogDiscoveryException::AnalogDiscoveryException(std::string func, std::string file, int line, int errorNumber, std::string what) :
-	m_func(func),
-	m_file(file),
-	m_msg(what),
-	m_line(line),
-	m_errno(errorNumber)
+AnalogDiscoveryException::AnalogDiscoveryException(const char *func, const char *file, int line, int errorNumber, const char *what) :
+	basetype(func, file, line, errorNumber, what)
 {}
 
 const char* AnalogDiscoveryException::what() const noexcept
 {
-	return ("AnalogDiscoveryException caught:\n  " + m_file + ":" + std::to_string(m_line) + "\n  " + m_func  + "\n  errno=" + std::to_string(m_errno) + "\n  " + m_msg).c_str();
+	return basetype::what();
 }
 
-void AnalogDiscovery::throwIfNotOpened(std::string func, std::string file, int line)
+void AnalogDiscovery::throwIfNotOpened(const char* func, const char* file, int line)
 {
 	if (!m_opened)
 		throw AnalogDiscoveryException(func, file, line, 0, "Device not opened");
 }
 
-void AnalogDiscovery::checkAndThrow(bool ret, std::string func, std::string file, int line)
+void AnalogDiscovery::checkAndThrow(bool ret, const char* func, const char* file, int line)
 {
 	if (!ret) {
 		DWFERC pdwferc;

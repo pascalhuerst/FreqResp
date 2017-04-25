@@ -6,17 +6,14 @@
 #include <list>
 #include <chrono>
 
-class GPIOException : public std::exception {
-public:
-	GPIOException(std::string func, std::string file, int line, int errorNumber, std::string what);
-	virtual const char* what() const noexcept;
+#include "descriptiveexception.h"
 
-private:
-	std::string m_func;
-	std::string m_file;
-	std::string m_msg;
-	int m_line;
-	int m_errno;
+class GPIOException : public DescriptiveException {
+public:
+	typedef DescriptiveException basetype;
+
+	GPIOException(const char* func, const char* file, int line, int errorNumber, const char* what);
+	virtual const char* what() const noexcept;
 };
 
 class GPIO
@@ -88,8 +85,8 @@ private:
 
 SharedGPIOHandle createGPIO(const std::string &name, int gpioNumber, GPIO::Direction d, bool value);
 
-
-
+// Helpers
+SharedGPIOHandle getGPIOForName(std::list<SharedGPIOHandle> gpios, const std::string &name);
 
 
 

@@ -11,9 +11,9 @@
 
 #include <boost/program_options.hpp>
 
-
 using namespace std;
 using namespace boost::program_options;
+using namespace std::chrono_literals;
 
 void printUsage(const options_description &desc, const std::string& extraMsg)
 {
@@ -25,7 +25,6 @@ void printUsage(const options_description &desc, const std::string& extraMsg)
 int main(int argc, char *argv[])
 {
 	try {
-
 		std::string debugLevelDesc;
 		for (int i = Debug::LevelNone; i < Debug::LevelLast; i++)
 			debugLevelDesc += std::to_string(i) + " = " + Debug::name(static_cast<Debug::Level>(i)) + "\n";
@@ -35,9 +34,14 @@ int main(int argc, char *argv[])
 				(paramHelp, "print this message")
 				(paramDebugLevel, value<int>(), debugLevelDesc.c_str())
 
+				(paramOutputFile, value<std::string>(), "Save data to file")
+
 				(paramSelfTest, "Run selftest to verify hw integrity")
 				(paramManualGpio, "Run manual GPIO test application")
 				(paramCalibrate, "Run input level calibration")
+
+				(paramListGpios, "List available GPIOs")
+				(paramSetGpios, boost::program_options::value<std::vector<std::string>>()->multitoken(),  "arg=(name,value name,value ...) Set GPIO(s) to value")
 
 				(paramSpeakerChannel, value<std::string>(), "arg=(lo,mid,hi) Set speaker output channel to measure on")
 				(paramChannel, value<char>(), "arg=(l|r) Set channel you want to measure on")
@@ -51,39 +55,94 @@ int main(int argc, char *argv[])
 		notify(varMap);
 
 		// Information and Debug
-		if (varMap.count("help")) { printUsage(desc, ""); }
+		if (varMap.count(paramHelp)) { printUsage(desc, ""); }
 
-		if (varMap.count("debug")) {
+		if (varMap.count(paramDebugLevel)) {
 			Debug::setDebugLevel(static_cast<Debug::Level>(varMap["debug"].as<int>()));
 		}
 
-		// Testing
-		if (varMap.count("self-test")) {
+		// Testing and single functions
+		if (varMap.count(paramSelfTest)) {
 			std::cout << "Running selftest" << std::endl;
 			exit(EXIT_SUCCESS);
 		}
 
-		if (varMap.count("manual-gpio")) {
-			manualGPIOTest();
+		if (varMap.count(paramManualGpio)) {
+			{ manualGPIOTest(); }
 			exit(EXIT_SUCCESS);
 		}
 
-		if (varMap.count("calibrate")) {
+		if (varMap.count(paramCalibrate)) {
 			manualInputLevelCalibration();
 			exit(EXIT_SUCCESS);
 		}
 
+		// GPIO
+		if (varMap.count(paramListGpios)) {
+			{ // exit() kills RAII, so make an extra block here
+				auto sharedDev = AnalogDiscovery::getFirstAvailableDevice();
+				auto gpios = loadDefaultGPIOMapping(sharedDev);
+				for (auto iter = gpios.begin(); iter != gpios.end(); ++iter)
+					std::cout << (*iter)->getName() << std::endl;
+			}
+			exit(EXIT_SUCCESS);
+		}
+
+		if (varMap.count(paramSetGpios)) {
+			Debug::warning("set-gpios", "Analog Discovery gpio changes are reset, after the interface is closed for some time. Therefore this tool keeps running, to hold the gpio to what you set it.");
+			auto v = varMap[paramSetGpios].as<vector<std::string>>();
+
+			for (auto iter=v.begin(); iter!=v.end(); ++iter) {
+				std::istringstream ss(*iter);
+				std::string gpioName;
+				std::string gpioValue;
+
+				std::getline(ss, gpioName, ',');
+				std::getline(ss, gpioValue, ',');
+				std::transform(gpioValue.begin(), gpioValue.end(), gpioValue.begin(),
+							   [](unsigned char c) { return std::tolower(c);});
+
+				int gpioValueToSet;
+				if (gpioValue == "hi" || gpioValue == "1") {
+					gpioValueToSet = 1;
+				} else if (gpioValue == "lo" || gpioValue == "0") {
+					gpioValueToSet = 0;
+				} else {
+					Debug::error(paramSetGpios, "Invalid value for gpio. Must be hi,1 or lo,0");
+					exit(EXIT_FAILURE);
+				}
+
+				auto sharedDev = AnalogDiscovery::getFirstAvailableDevice();
+				auto gpios = loadDefaultGPIOMapping(sharedDev);
+				auto gpio = getGPIOForName(gpios, gpioName);
+				if (!gpio) {
+					Debug::error(paramSetGpios, "GPIO with name " + gpioName + " seems not to exist!");
+					exit(EXIT_FAILURE);
+				} else {
+					Debug::warning(paramSetGpios, "GPIO Ready: " + gpio->getName());
+				}
+
+				//gpio->setDirection(GPIO::DirectionOut);
+				gpio->setValue(gpioValueToSet);
+			}
+
+			getchar();
+
+			exit(EXIT_SUCCESS);
+		}
+
+
 		// Measuring
-		if (varMap.count("channel")) {
-			channel = varMap["channel"].as<char>();
+		if (varMap.count(paramChannel)) {
+			channel = varMap[paramChannel].as<char>();
 			if (channel != 'l' && channel != 'r')
 				printUsage(desc, "invalid value for channel");
 		} else {
 			printUsage(desc, "channel must be set!");
 		}
 
-		if (varMap.count("speakerchannel")) {
-			auto sp = varMap["speakerchannel"].as<std::string>();
+		if (varMap.count(paramSpeakerChannel)) {
+			auto sp = varMap[paramSpeakerChannel].as<std::string>();
 
 			if (sp == "lo") speakerChannel = Speaker::Lo;
 			else if (sp == "mid") speakerChannel = Speaker::Mid;
@@ -93,20 +152,24 @@ int main(int argc, char *argv[])
 			printUsage(desc, "speakerchannel must be set!");
 		}
 
-		if (varMap.count("fmin")) {
-			fMin = varMap["fmin"].as<double>();
+		if (varMap.count(paramOutputFile)) {
+			outputName = varMap[paramOutputFile].as<std::string>();
 		}
 
-		if (varMap.count("fmax")) {
-			fMax = varMap["fmax"].as<double>();
+		if (varMap.count(paramfMin)) {
+			fMin = varMap[paramfMin].as<double>();
 		}
 
-		if (varMap.count("points-per-decade")) {
-			pointsPerDecade = varMap["points-per-decade"].as<int>();
+		if (varMap.count(paramfMax)) {
+			fMax = varMap[paramfMax].as<double>();
 		}
 
-		if (varMap.count("output-calibration")) {
-			outputCalibration = varMap["output-calibration"].as<double>();
+		if (varMap.count(paramPointsPerDecade)) {
+			pointsPerDecade = varMap[paramPointsPerDecade].as<int>();
+		}
+
+		if (varMap.count(paramOutputCalibration)) {
+			outputCalibration = varMap[paramOutputCalibration].as<double>();
 		}
 
 
@@ -123,12 +186,12 @@ int main(int argc, char *argv[])
 
 		// map Speaker Led {1,2} to front Led {1,2}
 		SharedTerminateFlag tf1 = SharedTerminateFlag(new std::atomic<bool>(false));
-		std::thread t1(mapInToOut, getGPIOForName(gpios, "Led 1"), getGPIOForName(gpios, "Front_LED_1"), 50, tf1);
+		std::thread t1(mapInToOut, getGPIOForName(gpios, "Led 1"), getGPIOForName(gpios, "Front_LED_1"), 20ms, tf1);
 		SharedTerminateFlag tf2 = SharedTerminateFlag(new std::atomic<bool>(false));
-		std::thread t2(mapInToOut, getGPIOForName(gpios, "Led 2"), getGPIOForName(gpios, "Front_LED_2"), 50, tf2);
+		std::thread t2(mapInToOut, getGPIOForName(gpios, "Led 2"), getGPIOForName(gpios, "Front_LED_2"), 20ms, tf2);
 
 
-		Measurement m("MyMeasurement", sharedDev, fMin, fMax, pointsPerDecade);
+		Measurement m(outputName, sharedDev, fMin, fMax, pointsPerDecade);
 
 		std::cout << "Press enter to start..." << std::endl;
 		getchar();
@@ -149,12 +212,19 @@ int main(int argc, char *argv[])
 		t1.join();
 		t2.join();
 
-	} catch (AnalogDiscoveryException& e) {
-		cerr << e.what() << std::endl;
-		return EXIT_FAILURE;
-	} catch (exception& e) {
-		cerr << e.what() << std::endl;
-		return EXIT_FAILURE;
+	} catch (const AnalogDiscoveryException &e) {
+		cerr << "AnalogDiscoveryException caught: " << e.what() << std::endl;
+		cerr << where(e);
+		exit(EXIT_FAILURE);
+	} catch (const GPIOException &e) {
+		cerr << "GPIOException caught: " << e.what() << std::endl;
+		cerr << where(e);
+		exit(EXIT_FAILURE);
+	} catch (const exception &e) {
+		cout << "std::exception caught: " << e.what() << std::endl;
+		exit(EXIT_FAILURE);
+	} catch (...) {
+		cerr << "Unknown exception caught! Abort." << std::endl;
 	}
 
 	return 0;

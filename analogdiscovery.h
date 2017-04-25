@@ -4,7 +4,6 @@
 
 #include <list>
 #include <vector>
-#include <exception>
 #include <string>
 #include <memory>
 #include <atomic>
@@ -15,19 +14,14 @@
 #include <digilent/waveforms/dwf.h>
 
 #include "debug.h"
+#include "descriptiveexception.h"
 
-
-class AnalogDiscoveryException : public std::exception {
+class AnalogDiscoveryException : public DescriptiveException {
 public:
-	AnalogDiscoveryException(std::string func, std::string file, int line, int errorNumber, std::string what);
-	virtual const char* what() const noexcept;
+	typedef DescriptiveException basetype;
 
-private:
-	std::string m_func;
-	std::string m_file;
-	std::string m_msg;
-	int m_line;
-	int m_errno;
+	AnalogDiscoveryException(const char* func, const char* file, int line, int errorNumber, const char* what);
+	virtual const char* what() const noexcept;
 };
 
 class AnalogDiscovery;
@@ -163,8 +157,8 @@ private:
 	bool m_opened;
 	std::string m_version;
 
-	void throwIfNotOpened(std::string func, std::string file, int line);
-	void checkAndThrow(bool ret, std::string func, std::string file, int line);
+	void throwIfNotOpened(const char *func, const char *file, int line);
+	void checkAndThrow(bool ret, const char *func, const char *file, int line);
 };
 
 std::ostream& operator<<(std::ostream& lhs, const AnalogDiscovery::DeviceState& rhs);

@@ -14,6 +14,7 @@ set(SRC_LIST
 	types.cpp
 	volume.cpp
 	speaker.cpp
+	descriptiveexception.cpp
 )
 
 if(CMAKE_COMPILER_IS_GNUCXX)

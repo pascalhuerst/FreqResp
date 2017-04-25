@@ -8,6 +8,8 @@
 #include <iostream>
 #include <thread>
 
+using namespace std::chrono_literals;
+
 // This is a bit hackish, but works good to test-toggle GPIOs by hand.
 void manualGPIOTest()
 {
@@ -20,10 +22,9 @@ void manualGPIOTest()
 	auto gpios = loadDefaultGPIOMapping(sharedDev);
 
 	// map Speaker Led {1,2} to front Led {1,2}
-	SharedTerminateFlag tf1 = SharedTerminateFlag(new std::atomic<bool>(false));
-	std::thread t1(mapInToOut, getGPIOForName(gpios, "Led 1"), getGPIOForName(gpios, "Front_LED_1"), 10, tf1);
-	SharedTerminateFlag tf2 = SharedTerminateFlag(new std::atomic<bool>(false));
-	std::thread t2(mapInToOut, getGPIOForName(gpios, "Led 2"), getGPIOForName(gpios, "Front_LED_2"), 10, tf2);
+	SharedTerminateFlag tf = createSharedTerminateFlag();
+	std::thread t1(mapInToOut, getGPIOForName(gpios, "Led 1"), getGPIOForName(gpios, "Front_LED_1"), 10ms, tf);
+	std::thread t2(mapInToOut, getGPIOForName(gpios, "Led 2"), getGPIOForName(gpios, "Front_LED_2"), 10ms, tf);
 
 	do {
 
@@ -44,10 +45,9 @@ void manualGPIOTest()
 		std::cout << std::endl << std::endl;
 
 		while ((g = kb.kbhit()) == 0);
-	} while(g != 'q');
+	} while (g != 'q');
 
-	tf1->store(true);
-	tf2->store(true);
+	tf->store(true);
 	t1.join();
 	t2.join();
 }
@@ -103,11 +103,10 @@ void manualInputLevelCalibration()
 	t1.join();
 }
 
-void mapInToOut(SharedGPIOHandle in, SharedGPIOHandle out, int refreshRate, SharedTerminateFlag terminateRequest)
+void mapInToOut(SharedGPIOHandle in, SharedGPIOHandle out, std::chrono::milliseconds refreshRate, SharedTerminateFlag terminateRequest)
 {
 	while (!terminateRequest->load()) {
 		out->setValue(in->getValue());
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
+		std::this_thread::sleep_for(refreshRate);
 	}
 }

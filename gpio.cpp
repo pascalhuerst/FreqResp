@@ -4,17 +4,15 @@
 #include <fstream>
 #include <thread>
 
-GPIOException::GPIOException(std::string func, std::string file, int line, int errorNumber, std::string what) :
-	m_func(func),
-	m_file(file),
-	m_msg(what),
-	m_line(line),
-	m_errno(errorNumber)
+#include <string.h>
+
+GPIOException::GPIOException(const char* func, const char* file, int line, int errorNumber, const char *what) :
+	basetype(func, file, line, errorNumber, what)
 {}
 
 const char* GPIOException::what() const noexcept
 {
-	return ("GPIOException caught:\n  " + m_file + ":" + std::to_string(m_line) + "\n  " + m_func  + "\n  errno=" + std::to_string(m_errno) + "\n  " + m_msg).c_str();
+	return basetype::what();
 }
 
 GPIO::GPIO(const std::string &name) :
@@ -77,7 +75,7 @@ SharedGPIOHandle createGPIO(const std::string &name, std::shared_ptr<AnalogDisco
 }
 
 // SYS FS
-const std::string  GPIOSysFs::s_basePath = "/sys/class/gpio";
+const std::string GPIOSysFs::s_basePath = "/sys/class/gpio";
 
 
 GPIOSysFs::GPIOSysFs(const std::string &name, int gpioNumber) :
@@ -89,7 +87,7 @@ GPIOSysFs::GPIOSysFs(const std::string &name, int gpioNumber) :
 	fileExport.open(fileExportPath);
 	if (!fileExport.is_open())
 		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
-							"Can not open file: " + fileExportPath + " to export GPIO" + std::to_string(m_gpioNumber));
+							("Can not open file: " + fileExportPath + " to export GPIO" + std::to_string(m_gpioNumber)).c_str());
 
 	fileExport << m_gpioNumber << std::endl;
 	fileExport.flush();
@@ -118,7 +116,7 @@ void GPIOSysFs::setDirection(Direction d)
 	fileDirection.open(fileDirectionPath);
 	if (!fileDirection.is_open())
 		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
-							"Can not open file: " + fileDirectionPath + " to set direction for GPIO" + std::to_string(m_gpioNumber));
+							("Can not open file: " + fileDirectionPath + " to set direction for GPIO" + std::to_string(m_gpioNumber)).c_str());
 
 	fileDirection << (d == DirectionIn ? "in" : "out") << std::endl;
 	fileDirection.flush();
@@ -131,7 +129,7 @@ void GPIOSysFs::setValue(bool v)
 	fileValue.open(fileValuePath);
 	if (!fileValue.is_open())
 		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
-							"Can not open file: " + fileValuePath + " to set value for GPIO" + std::to_string(m_gpioNumber));
+							("Can not open file: " + fileValuePath + " to set value for GPIO" + std::to_string(m_gpioNumber)).c_str());
 
 	fileValue << (v ? "1" : "0") << std::endl;
 	fileValue.flush();
@@ -144,14 +142,14 @@ GPIO::Direction GPIOSysFs::getDirection() const
 	fileDirection.open(fileDirectionPath);
 	if (!fileDirection.is_open())
 		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
-							"Can not open file: " + fileDirectionPath + " to get direction for GPIO" + std::to_string(m_gpioNumber));
+							("Can not open file: " + fileDirectionPath + " to get direction for GPIO" + std::to_string(m_gpioNumber)).c_str());
 
 	std::string line;
 	std::getline(fileDirection, line);
 
 	if (line != "in" && line != "out")
 		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
-							"Invalid value (" + line + ") while reading direction for GPIO" + std::to_string(m_gpioNumber));
+							("Invalid value (" + line + ") while reading direction for GPIO" + std::to_string(m_gpioNumber)).c_str());
 
 	return (line == "in" ? DirectionIn : DirectionOut);
 }
@@ -163,14 +161,14 @@ bool GPIOSysFs::getValue() const
 	fileValue.open(fileValuePath);
 	if (!fileValue.is_open())
 		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
-							"Can not open file: " + fileValuePath + " to get value for GPIO" + std::to_string(m_gpioNumber));
+							("Can not open file: " + fileValuePath + " to get value for GPIO" + std::to_string(m_gpioNumber)).c_str());
 
 	std::string line;
 	std::getline(fileValue, line);
 
 	if (line != "1" && line != "0")
 		throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
-							"Invalid value (" + line + ") while reading dvaliue for GPIO" + std::to_string(m_gpioNumber));
+							("Invalid value (" + line + ") while reading dvaliue for GPIO" + std::to_string(m_gpioNumber)).c_str());
 
 	return (line == "1" ? true : false);
 }
@@ -178,4 +176,16 @@ bool GPIOSysFs::getValue() const
 SharedGPIOHandle createGPIO(const std::string &name, int gpioNumber, GPIO::Direction d, bool value)
 {
 	return std::unique_ptr<GPIO>(new GPIOSysFs(name, gpioNumber, d, value));
+}
+
+// Helpers
+SharedGPIOHandle getGPIOForName(std::list<SharedGPIOHandle> gpios, const std::string &name)
+{
+	for (auto it=gpios.begin(); it!=gpios.end(); ++it) {
+		if ((*it)->getName() == name)
+			return *it;
+	}
+
+	throw GPIOException(__PRETTY_FUNCTION__, __FILE__, __LINE__, 0,
+						("GPIO with name \"" + name +  "\" does not exist!").c_str());
 }
