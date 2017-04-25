@@ -35,6 +35,11 @@ endif()
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall")
 
+if(NOT DEFINED SYSTEMD_CONFIGURATION_FILES_DIR)
+  set(SYSTEMD_CONFIGURATION_FILES_DIR "lib/systemd/system")
+endif()
+
+
 link_directories(/usr/lib64/)
 
 add_executable(${PROJECT_NAME} ${SRC_LIST})
@@ -46,6 +51,9 @@ add_executable(gpioctld ${GPIOCTLD_SRC_LIST})
 target_link_libraries(gpioctld dwf)
 target_link_libraries(gpioctld pthread)
 
+configure_file(${CMAKE_SOURCE_DIR}/systemd/gpioctld.service.in
+               ${PROJECT_BINARY_DIR}/systemd/gpioctld.service @ONLY)
+
 INSTALL(TARGETS ${PROJECT_NAME}
 	RUNTIME DESTINATION sbin
 )
@@ -55,3 +63,5 @@ INSTALL(TARGETS gpioctld
 INSTALL(PROGRAMS gpioctl
 	DESTINATION bin
 )
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/systemd/gpioctld.socket ${PROJECT_BINARY_DIR}/systemd/gpioctld.service
+        DESTINATION ${SYSTEMD_CONFIGURATION_FILES_DIR})
