@@ -1,0 +1,20 @@
+The Analog Discovery device needs to be kept open during flashing
+since if it is closed it will eventually reset itself to a default value,
+and since the Relais_Power GPIO is attached to this,
+it will shut down the SoM.
+
+The FreqResp tool does not have a problem with this since it is interactive,
+but for TeamCity builds we need to be able to control the GPIOs
+via an easily batch scriptable interface
+that can cross multiple shell sessions.
+
+To accomplish this there are systemd units,
+which create a UNIX socket in /run/gpioctld.socket
+and starts a daemon that opens the Analog Discovery device
+and listens for requests to set GPIOs to "on" or "off".
+
+Since clients can't share access to the Analog Discovery device
+the FreqResp tool won't work alongside it,
+so any Analog Discovery actions that need to be performed during tests
+need to either stop the gpioctld service
+or extend the gpioctld interface to perform those actions.
