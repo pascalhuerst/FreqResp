@@ -77,8 +77,6 @@ std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle a
 	gpios.push_back(createGPIO("Enable", analogDiscovery, 15, GPIO::DirectionOut, false));
 
 
-#warning "!!!! Reenable MinnowBoard GPIOs !!!!"
-#if 0
 	// MinnowBoard GPIOs
 	// Outputs
 	gpios.push_back(createGPIO("Enc3", 479, GPIO::DirectionOut, false));
@@ -93,7 +91,6 @@ std::list<SharedGPIOHandle> loadDefaultGPIOMapping(SharedAnalogDiscoveryHandle a
 	gpios.push_back(createGPIO("Led 3", 505, GPIO::DirectionIn, false));
 	gpios.push_back(createGPIO("Led 4", 339, GPIO::DirectionIn, false));
 	gpios.push_back(createGPIO("Led 5", 504, GPIO::DirectionIn, false));
-#endif
 #endif
 
 	return gpios;
