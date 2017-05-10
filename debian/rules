@@ -1,0 +1,10 @@
+#!/usr/bin/make -f
+
+DH_VERBOSE := 1
+export DH_VERBOSE
+
+%:
+	dh $@ --with=systemd
+
+override_dh_auto_configure:
+	dh_auto_configure -- -DCMAKE_INSTALL_LIBEXECDIR=lib -DSYSTEMD_CONFIGURATION_FILES_DIR=/lib/systemd/system

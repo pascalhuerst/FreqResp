@@ -1,0 +1,12 @@
+[Unit]
+Description=gpioctld service
+Requires=gpioctld.socket
+After=gpioctld.socket
+
+[Service]
+ExecStart=@CMAKE_INSTALL_FULL_LIBEXECDIR@/gpioctld
+StandardInput=socket
+StandardOutput=inherit
+
+[Install]
+WantedBy=multi-user.target

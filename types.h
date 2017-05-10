@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <vector>
+#include <atomic>
 
 typedef std::shared_ptr<std::vector<std::vector<double>>> SharedSampleStorage;
 typedef std::shared_ptr<std::atomic<bool>> SharedTerminateFlag;
