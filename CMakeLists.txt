@@ -17,6 +17,7 @@ set(SRC_LIST
 	volume.cpp
 	speaker.cpp
 	descriptiveexception.cpp
+	socket.cpp
 )
 
 set (FREQRESPD_SRC_LIST

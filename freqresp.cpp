@@ -8,6 +8,8 @@
 #include "specialkeyboard.h"
 #include "tests.h"
 #include "debug.h"
+#include "socket.h"
+
 
 #include <boost/program_options.hpp>
 
@@ -53,6 +55,10 @@ int main(int argc, char *argv[])
 		variables_map varMap;
 		store(parse_command_line(argc, argv, desc), varMap);
 		notify(varMap);
+
+		Socket sock("/home/paso/test.socket");
+
+		sock.send("Hallo Welt hier bin ich und sende scheiss");
 
 		// Information and Debug
 		if (varMap.count(paramHelp)) { printUsage(desc, ""); }
