@@ -124,10 +124,8 @@ int main(int argc, char *argv[])
 
 				//gpio->setDirection(GPIO::DirectionOut);
 				gpio->setValue(gpioValueToSet);
+				getchar();
 			}
-
-			getchar();
-
 			exit(EXIT_SUCCESS);
 		}
 
@@ -187,8 +185,7 @@ int main(int argc, char *argv[])
 		// map Speaker Led {1,2} to front Led {1,2}
 		SharedTerminateFlag tf1 = SharedTerminateFlag(new std::atomic<bool>(false));
 		std::thread t1(mapInToOut, getGPIOForName(gpios, "Led 1"), getGPIOForName(gpios, "Front_LED_1"), 20ms, tf1);
-		SharedTerminateFlag tf2 = SharedTerminateFlag(new std::atomic<bool>(false));
-		std::thread t2(mapInToOut, getGPIOForName(gpios, "Led 2"), getGPIOForName(gpios, "Front_LED_2"), 20ms, tf2);
+		std::thread t2(mapInToOut, getGPIOForName(gpios, "Led 2"), getGPIOForName(gpios, "Front_LED_2"), 20ms, tf1);
 
 
 		Measurement m(outputName, sharedDev, fMin, fMax, pointsPerDecade);
@@ -208,7 +205,6 @@ int main(int argc, char *argv[])
 
 		// Clean up LED Mapping threads
 		tf1->store(true);
-		tf2->store(true);
 		t1.join();
 		t2.join();
 

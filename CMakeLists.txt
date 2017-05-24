@@ -1,4 +1,4 @@
-project(FreqResp)
+project(freqresp)
 cmake_minimum_required(VERSION 2.8)
 
 include(GNUInstallDirs)
@@ -7,7 +7,7 @@ set(SRC_LIST
 	analogdiscovery.cpp
 	gpio.cpp
 	measurement.cpp
-	main.cpp
+	freqresp.cpp
 	default.h
 	specialkeyboard.cpp
 	tests.cpp
@@ -18,6 +18,23 @@ set(SRC_LIST
 	speaker.cpp
 	descriptiveexception.cpp
 )
+
+set (FREQRESPD_SRC_LIST
+	freqrespd.cpp
+	analogdiscovery.cpp
+	gpio.cpp
+	measurement.cpp
+	default.h
+	specialkeyboard.cpp
+	tests.cpp
+	debug.cpp
+	encoder.cpp
+	types.cpp
+	volume.cpp
+	speaker.cpp
+	descriptiveexception.cpp
+)
+
 set(GPIOCTLD_SRC_LIST
 	analogdiscovery.cpp
 	descriptiveexception.cpp
@@ -46,6 +63,11 @@ add_executable(${PROJECT_NAME} ${SRC_LIST})
 target_link_libraries(${PROJECT_NAME} dwf)
 target_link_libraries(${PROJECT_NAME} pthread)
 target_link_libraries(${PROJECT_NAME} boost_program_options)
+
+add_executable(freqrespd ${FREQRESPD_SRC_LIST})
+target_link_libraries(freqrespd dwf)
+target_link_libraries(freqrespd pthread)
+target_link_libraries(freqrespd systemd)
 
 add_executable(gpioctld ${GPIOCTLD_SRC_LIST})
 target_link_libraries(gpioctld dwf)

@@ -4,23 +4,20 @@
 #include "descriptiveexception.h"
 
 DescriptiveException::DescriptiveException(const char* func, const char* file, int line, int errorNumber, const char* what) :
-m_line(line),
-m_errno(errorNumber)
+	m_line(line),
+	m_errno(errorNumber)
 {
-	size_t len = strlen(what);
-	size_t s = s_msgLength > len ? len : s_msgLength;
-	memcpy(m_msg, what, s);
-	m_msg[s] = 0;
+	size_t l = s_msgLength < strlen(what) ? s_msgLength : strlen(what);
+	memcpy(m_msg, what, l);
+	m_msg[l] = 0;
 
-	len = strlen(func);
-	s = s_funcNameLength > len ? len : s_funcNameLength;
-	memcpy(m_funcName, func, s);
-	m_funcName[s] = 0;
+	l = s_funcNameLength < strlen(func) ? s_funcNameLength : strlen(func);
+	memcpy(m_funcName, func, l);
+	m_funcName[l] = 0;
 
-	len = strlen(file);
-	s = s_fileNameLength > len ? len : s_fileNameLength;
-	memcpy(m_fileName, file, s);
-	m_fileName[s] = 0;
+	l = s_fileNameLength < strlen(file) ? s_fileNameLength : strlen(file);
+	memcpy(m_fileName, file, l);
+	m_fileName[l] = 0;
 }
 
 const char* DescriptiveException::what() const noexcept
@@ -51,9 +48,10 @@ int DescriptiveException::errorNumber() const noexcept
 std::string where(const DescriptiveException& de)
 {
 	std::stringstream ret;
-	ret << "File     :" << de.file() << std::endl
-	<< "Function :" << de.func() << std::endl
-	<< "Line     :" << de.line() << std::endl;
+	ret
+			<< "File     :" << de.file() << std::endl
+			<< "Function :" << de.func() << std::endl
+			<< "Line     :" << de.line() << std::endl;
 
 	return ret.str();
 }

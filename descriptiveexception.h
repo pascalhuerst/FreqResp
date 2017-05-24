@@ -14,9 +14,9 @@ public:
 	int errorNumber() const noexcept;
 
 private:
-	const static size_t s_msgLength = 512;
-	const static size_t s_funcNameLength = 512;
-	const static size_t s_fileNameLength = 512;
+	const static size_t s_msgLength = 256;
+	const static size_t s_funcNameLength = 128;
+	const static size_t s_fileNameLength = 128;
 
 	char m_msg[s_msgLength];
 	char m_funcName[s_funcNameLength];
